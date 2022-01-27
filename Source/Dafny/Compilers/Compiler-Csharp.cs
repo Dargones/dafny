@@ -2882,7 +2882,7 @@ namespace Microsoft.Dafny {
         }
       }
 
-      return "";
+      throw new Exception("ParameterizedTests: tests must be in public class");
     }
 
     private int GetTupleLength(string input) {
@@ -2891,7 +2891,7 @@ namespace Microsoft.Dafny {
       if (m.Success)
         return Int32.Parse(m.Value);
       else
-        throw new Exception("Your dafny structure must be a sequence of tuples");
+        throw new Exception("ParameterizedTests: Your dafny structure must be a sequence of tuples");
     }
 
     private (string, int) GetDafnyStructureFromWr(ConcreteSyntaxTree wr, string MethodName) {
@@ -2906,7 +2906,7 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      throw new Exception("Method source must be a public static method");
+      throw new Exception("ParameterizedTests: Method source must be a public static method");
     }
 
     private void WriteGlueCode(ConcreteSyntaxTree wr, string className, string methodName, string dafnyStructure, int tupleLength) {

@@ -2871,6 +2871,70 @@ namespace Microsoft.Dafny {
       return false;
     }
 
+    private string GetClassNameFromWr(ConcreteSyntaxTree wr) {
+      foreach (var node in wr.Nodes) {
+        if (node is Microsoft.Dafny.LineSegment) {
+          Microsoft.Dafny.LineSegment lsNode = (Microsoft.Dafny.LineSegment) node;
+          string pattern = @"(?<=public )[^_]+(?=\()";
+          System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(lsNode.Value, pattern);
+          if (m.Success)
+            return m.Value;
+        }
+      }
+
+      return "";
+    }
+
+    private int GetTupleLength(string input) {
+      string pattern = @"(?<=Tuple)[0-9]*";
+      System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(input, pattern);
+      if (m.Success)
+        return Int32.Parse(m.Value);
+      else
+        throw new Exception("Your dafny structure must be a sequence of tuples");
+    }
+
+    private (string, int) GetDafnyStructureFromWr(ConcreteSyntaxTree wr, string MethodName) {
+      foreach (var node in wr.Nodes) {
+        if (node is Microsoft.Dafny.LineSegment) {
+          Microsoft.Dafny.LineSegment lsNode = (Microsoft.Dafny.LineSegment) node;
+          string pattern = @"(?<=public static ).*(?= " + MethodName + ")";
+          System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(lsNode.Value, pattern);
+          if (m.Success) {
+            int tupleLength = GetTupleLength(lsNode.Value);
+            return (m.Value, tupleLength);
+          }
+        }
+      }
+      throw new Exception("Method source must be a public static method");
+    }
+
+    private void WriteGlueCode(ConcreteSyntaxTree wr, string className, string methodName, string dafnyStructure, int tupleLength) {
+      wr.WriteLine("public static System.Collections.Generic.IEnumerable<object[]> DafnyTupleToObjArray(" + dafnyStructure + " dafnyStructure) {");
+      wr.WriteLine("System.Collections.Generic.List<object[]> newList = new ();");
+      wr.WriteLine("foreach (var tuple in dafnyStructure.UniqueElements) {");
+      wr.Write("newList.Add(new object[] {");
+      for (int i = 0; i < tupleLength; i++) {
+        string tupleValue = "tuple._" + i.ToString();
+        wr.Write(tupleValue);
+        if (i < tupleLength - 1)
+          wr.Write(", ");
+      }
+      wr.WriteLine("});");
+      wr.WriteLine("}");
+      wr.WriteLine("return newList;");
+      wr.WriteLine("}");
+
+      wr.WriteLine("public static System.Collections.Generic.IEnumerable<object[]> _" + methodName + "(string methodName) {");
+      wr.WriteLine("System.Reflection.MethodInfo m = typeof(" + className + ").GetMethod(methodName);");
+      wr.WriteLine(dafnyStructure + " retValue = (" + dafnyStructure + ") m.Invoke(null, null);");
+      wr.WriteLine("return DafnyTupleToObjArray(retValue);");
+      wr.WriteLine("}");
+
+      wr.WriteLine("[Xunit.Theory]");
+      wr.WriteLine("[Xunit.MemberData(nameof(_" + methodName + "), \"" + methodName + "\")]");
+    }
+
     private void AddTestCheckerIfNeeded(string name, Declaration decl, ConcreteSyntaxTree wr) {
       if (Attributes.Contains(decl.Attributes, "test")) {
         // TODO: The resolver needs to check the assumptions about the declaration
@@ -2881,9 +2945,20 @@ namespace Microsoft.Dafny {
         } else if (decl is Method) {
           var method = (Method)decl;
           hasReturnValue = method.Outs.Count > 1;
+          var ins = method.Ins.Count;
         }
 
-        wr.WriteLine("[Xunit.Fact]");
+        var args = Attributes.FindExpressions(decl.Attributes, "test");
+
+        if (args.Count == 2 && args[0] is LiteralExpr && args[1] is LiteralExpr) {
+          string className = GetClassNameFromWr(wr);
+          LiteralExpr methodNameExpr = (LiteralExpr) args[1];
+          (string dafnyStructure, int tupleLength) = GetDafnyStructureFromWr(wr, methodNameExpr.Value.ToString());
+          WriteGlueCode(wr, className, methodNameExpr.Value.ToString(), dafnyStructure, tupleLength);
+        }
+        else {
+          wr.WriteLine("[Xunit.Fact]");
+        }
         if (hasReturnValue) {
           wr = wr.NewNamedBlock("public static void {0}_CheckForFailureForXunit()", name);
           wr.WriteLine("var result = {0}();", name);

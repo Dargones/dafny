@@ -6,6 +6,8 @@ namespace Microsoft.Dafny {
   class LineSegment : ICanRender {
     private readonly string _value;
 
+    public string Value => _value;
+
     public LineSegment(string value) {
       this._value = value;
     }

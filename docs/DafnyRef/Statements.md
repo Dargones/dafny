@@ -862,7 +862,7 @@ method M1() returns (ghost y: int)
 }
 ```
 
-## 19.11. If Statement
+## 19.11. If Statement {#sec-if-statement}
 ````grammar
 IfStmt = "if"
   ( AlternativeBlock(allowBindingGuards: true)
@@ -1188,7 +1188,7 @@ loop condition). Just as Dafny will not discover properties of a method
 on its own, it will not know that any but the most basic properties of a loop
 are preserved unless it is told via an invariant.
 
-### 19.14.2. Loop termination
+### 19.14.2. Loop termination {#sec-loop-termination}
 
 Dafny proves that code terminates, i.e. does not loop forever, by using
 `decreases` annotations. For many things, Dafny is able to guess the right
@@ -1636,7 +1636,10 @@ indicates to the compiler
 that it should produce target code
 that is correspondingly annotated to mark the method
 as a unit test (e.g., an XUnit test) in the target language.
-Within that method one might use `expect` statements (as well as `print` statements)
+Alternatively, the `/runAllTests` option will produce a main method
+that invokes all methods with the `{:test}` attribute, and hence does not
+depend on any testing framework in the target language.
+Within such methods one might use `expect` statements (as well as `print` statements)
 to insert checks that the target program is behaving as expected.
 
 C) Compiler tests

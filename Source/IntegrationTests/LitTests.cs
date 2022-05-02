@@ -26,6 +26,8 @@ namespace IntegrationTests {
     private static readonly string[] DefaultDafnyArguments = new[] {
       "/countVerificationErrors:0",
 
+      "/vcsCores:2",
+
       // We do not want absolute or relative paths in error messages, just the basename of the file
       "/useBaseNameForFileName",
 
@@ -106,11 +108,21 @@ namespace IntegrationTests {
         Environment.SetEnvironmentVariable("HOME",
           Environment.GetEnvironmentVariable("HOMEDRIVE") + Environment.GetEnvironmentVariable("HOMEPATH"));
         passthroughEnvironmentVariables = passthroughEnvironmentVariables
-          .Concat(new[] {
-            "DOTNET_CLI_HOME",
-            "HOMEDRIVE", "HOMEPATH",
+          .Concat(new[] { // Careful: Keep this list in sync with the one in lit.site.cfg
+            "APPDATA",
+            "HOMEDRIVE",
+            "HOMEPATH",
+            "INCLUDE",
+            "LIB",
             "LOCALAPPDATA",
-            "APPDATA", "ProgramFiles", "ProgramFiles(x86)", "SystemRoot", "USERPROFILE"
+            "NODE_PATH",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "SystemRoot",
+            "SystemDrive",
+            "TEMP",
+            "TMP",
+            "USERPROFILE"
           }).ToArray();
       } else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
         features = new[] { "macosx", "posix" };

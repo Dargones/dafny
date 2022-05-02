@@ -34,40 +34,17 @@ namespace DafnyTestGeneration {
     }
 
     /// <summary>
-    /// Redirect console output to capture the result of invoking an action
-    /// </summary>
-    public static string CaptureConsoleOutput(Action action) {
-      var originalOut = Console.Out;
-      var originalErr = Console.Error;
-      using var stream = new MemoryStream();
-      var writer = new StreamWriter(stream);
-      Console.SetOut(writer);
-      Console.SetError(writer);
-
-      action.Invoke();
-
-      Console.Out.Flush();
-      Console.Error.Flush();
-      var output = Encoding.UTF8.GetString(
-        stream.GetBuffer(),
-        0,
-        (int)stream.Length);
-      Console.SetOut(originalOut);
-      Console.SetError(originalErr);
-      return output;
-    }
-
-    /// <summary>
     /// Restore the original name of a Dafny method from its Boogie translation
     /// </summary>
     public static string GetDafnyMethodName(string boogieName) {
-      boogieName = boogieName.Split("$").Last();
-      var methodName = boogieName.Split(".").Last();
+      boogieName = new DafnyModelType(boogieName.Split("$").Last()).InDafnyFormat().Name;
+      // TODO: be smarter about this conversion!
+      var methodName = boogieName.Split(".").Last().Split("_").Last();
       var classPath = new DafnyModelType(boogieName
-        .Substring(0, boogieName.Length - methodName.Length - 1))
+          .Substring(0, boogieName.Length - methodName.Length - 1))
         .InDafnyFormat().Name
         .Split(".")
-        .Where(m => m[0] != '_');
+        .Where(m => m != "" && m[0] != '_');
       var className = string.Join(".", classPath);
       return className.Equals("") ? methodName : $"{className}.{methodName}";
     }

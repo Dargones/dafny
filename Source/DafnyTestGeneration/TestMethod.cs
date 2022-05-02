@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text.RegularExpressions;
 using DafnyServer.CounterexampleGeneration;
 using Microsoft.Boogie;
@@ -13,12 +14,6 @@ namespace DafnyTestGeneration {
 
     private static int nextId; // next unique id to be assigned
 
-    // maps a basic type (int, real, bv4, etc.) to the set of values that
-    // the model assigns to variables of this type. Values are represented
-    // as integers. For conversion rules, see GetUnspecifiedValue method.
-    private readonly Dictionary<string, HashSet<int>> reservedValues = new();
-    // maps a particular element to a value reserved for it (see above)
-    private readonly Dictionary<Model.Element, int> reservedValuesMap = new();
     // list of values to mock together with their types
     public readonly List<(string id, DafnyModelType type)> ObjectsToMock = new();
     // maps a variable that is mocked to its unique id
@@ -30,16 +25,31 @@ namespace DafnyTestGeneration {
     public readonly string MethodName;
     // values of the arguments to be passed to the method call
     public readonly List<string> ArgValues;
+    private readonly DafnyModel dafnyModel;
+
+    private static readonly Dictionary<DafnyModelType, string> freshMethods = new();
 
     public TestMethod(DafnyInfo dafnyInfo, string log) {
       DafnyInfo = dafnyInfo;
       var typeNames = ExtractPrintedInfo(log, "Types | ");
       var argumentNames = ExtractPrintedInfo(log, "Impl | ");
-      var dafnyModel = DafnyModel.ExtractModel(log);
+      dafnyModel = DafnyModel.ExtractModel(log);
       MethodName = Utils.GetDafnyMethodName(argumentNames.First());
       argumentNames.RemoveAt(0);
-      RegisterReservedValues(dafnyModel.Model);
       ArgValues = ExtractInputs(dafnyModel.States.First(), argumentNames, typeNames);
+    }
+
+    public static void clearFreshMethods() {
+      freshMethods.Clear();
+    }
+
+    public static string emitFreshMethods() {
+      var result = "";
+      foreach (var typ in freshMethods.Keys) {
+        result +=
+          $"\nmethod {{:synthesize}} {freshMethods[typ]}() returns (o:{typ.ToString()}) ensures fresh(o)";
+      }
+      return result;
     }
 
     /// <summary>
@@ -58,6 +68,9 @@ namespace DafnyTestGeneration {
       var result = new List<string>();
       var vars = state.ExpandedVariableSet(null);
       for (var i = 0; i < printOutput.Count; i++) {
+        if (types[i] == "Ty") {
+          continue; // this means that this parameter is a type variable
+        }
         if (printOutput[i] == "") {
           result.Add(GetDefaultValue(DafnyModelType.FromString(types[i])));
           continue;
@@ -91,15 +104,12 @@ namespace DafnyTestGeneration {
         return mockedVarId[variable];
       }
 
-      if (variable.Value.StartsWith("?")) {
-        return GetUnspecifiedValue(variable.Type, variable.Element);
-      }
-
       if (variable is DuplicateVariable duplicateVariable) {
         return ExtractVariable(duplicateVariable.Original);
       }
 
       List<string> elements = new();
+      variable.Type = variable.Type.ReplaceTypeVariables("int");
       switch (variable.Type.Name) {
         case "?":
           return "null";
@@ -140,11 +150,31 @@ namespace DafnyTestGeneration {
           return $"map[{string.Join(", ", mappingStrings)}]";
         case var arrType when new Regex("^_System.array[0-9]*\\?$").IsMatch(arrType):
           break;
+        case var _ when (!variable.Value.StartsWith("(") && variable.Value != "null"):
+          var dataType = variable.Type.GetNonNullable().InDafnyFormat().ReplaceTypeVariables("int");
+          List<string> fields = new();
+          foreach (var filedName in variable.children.Keys) {
+            if (variable.children[filedName].Count != 1) {
+              continue;
+            }
+            fields.Add(filedName + ":=" + ExtractVariable(variable.children[filedName].First()));
+          }
+          if (fields.Count == 0) {
+            return dataType + "." + variable.CanonicalName();
+          } else {
+            return dataType + "." + variable.CanonicalName() + "(" + string.Join(",", fields) + ")";
+          }
+
+          break;
         default:
           var varId = $"v{ObjectsToMock.Count}";
-          var dafnyType =
-            new DafnyModelType(variable.Type.GetNonNullable().InDafnyFormat().ToString());
+          var dafnyType = variable.Type.GetNonNullable().InDafnyFormat().ReplaceTypeVariables("int");
           ObjectsToMock.Add(new(varId, dafnyType));
+          if (!freshMethods.ContainsKey(dafnyType)) {
+            freshMethods[dafnyType] = "getFresh" +
+                                      Regex.Replace(dafnyType.ToString(),
+                                        "[^a-zA-Z]", "");
+          }
           mockedVarId[variable] = varId;
           foreach (var filedName in variable.children.Keys) {
             if (variable.children[filedName].Count != 1) {
@@ -158,61 +188,13 @@ namespace DafnyTestGeneration {
     }
 
     /// <summary>
-    /// Return a value that is unique to the given element among elements
-    /// of a particular type. The value must be of a basic type.
-    /// </summary>
-    /// <param name="type"></param>
-    /// <param name="element"></param>
-    /// <returns></returns>
-    private string GetUnspecifiedValue(DafnyModelType type, Model.Element element) {
-      var value = GetUnspecifiedValue(type.Name, element);
-      return type.Name switch {
-        "char" => $"'{Convert.ToChar(value)}'",
-        "int" => value.ToString(),
-        "real" => $"{value}.0",
-        "bool" => (value == 1).ToString(),
-        var bvType when new Regex("bv[0-9]+$").IsMatch(bvType) =>
-          $"({value} as {bvType})",
-        _ => "null" // Shouldn't happen
-      };
-    }
-
-    /// <summary>
-    /// Return an integer for a Model.Element, whose value is unspecified.
-    /// The integer must be unique among elements that represent values of
-    /// the same type. The integer has different meaning depending
-    /// on the type of the element, see GetUnspecifiedValue method.
-    /// </summary>
-    /// <param name="typeName">TypeName of value represented by element</param>
-    /// <param name="element"></param>
-    /// <returns></returns>
-    private int GetUnspecifiedValue(string typeName, Model.Element element) {
-      if (reservedValuesMap.ContainsKey(element)) {
-        return reservedValuesMap[element];
-      }
-
-      if (!reservedValues.ContainsKey(typeName)) {
-        reservedValues[typeName] = new();
-      }
-
-      // 33 is the first non special character (excluding space)
-      var i = typeName == "char" ? 33 : 0;
-      while (reservedValues[typeName].Contains(i)) {
-        i++;
-      }
-
-      reservedValues[typeName].Add(i);
-      reservedValuesMap[element] = i;
-      return i;
-    }
-
-    /// <summary>
     /// Return the default value for a variable of a particular type.
     /// Note that default value is different from unspecified value.
     /// An unspecified value is such a value for which a model does reserve
     /// an element (e.g. T@U!val!25).
     /// </summary>
     private string GetDefaultValue(DafnyModelType type) {
+      type = type.ReplaceTypeVariables("int");
       var result = type.Name switch {
         "char" => "\'a\'",
         "bool" => "false",
@@ -222,7 +204,7 @@ namespace DafnyTestGeneration {
         "set" => "{}",
         "map" => "map[]",
         var bv when new Regex("^bv[0-9]+$").IsMatch(bv) => $"(0 as {bv})",
-        var nullable when new Regex("^.*?$").IsMatch(nullable) => "null",
+        // var nullable when new Regex("^.*?$").IsMatch(nullable) => "null",
         _ => null
       };
       if (result != null) {
@@ -231,60 +213,12 @@ namespace DafnyTestGeneration {
       // this should only be reached if the type is non-nullable
       var varId = $"v{ObjectsToMock.Count}";
       ObjectsToMock.Add(new(varId, type));
+      if (!freshMethods.ContainsKey(type)) {
+        freshMethods[type] = "getFresh" +
+                                            Regex.Replace(type.ToString(),
+                                              "[^a-zA-Z]", "");
+      }
       return varId;
-    }
-
-    /// <summary>
-    /// Registered all values of basicTypes specified by the model in
-    /// the reservedValues map;
-    /// </summary>
-    private void RegisterReservedValues(Model model) {
-      var fCharToInt = model.MkFunc("char#ToInt", 1);
-      reservedValues["char"] = new();
-      foreach (var app in fCharToInt.Apps) {
-        reservedValues["char"].Add(((Model.Integer)app.Result).AsInt());
-      }
-
-      var fU2Int = model.MkFunc("U_2_int", 1);
-      reservedValues["int"] = new();
-      foreach (var app in fU2Int.Apps) {
-        // this skips negative values
-        if (app.Result is Model.Integer) {
-          reservedValues["int"].Add(app.Result.AsInt());
-        }
-      }
-
-      var fU2Bool = model.MkFunc("U_2_bool", 1);
-      reservedValues["bool"] = new();
-      foreach (var app in fU2Bool.Apps) {
-        reservedValues["bool"].Add(((Model.Boolean)app.Result).Value ? 1 : 0);
-      }
-
-      var fU2Real = model.MkFunc("U_2_real", 1);
-      reservedValues["real"] = new();
-      foreach (var app in fU2Real.Apps) {
-        var resultAsString = app.Result.ToString() ?? "";
-        // this skips fractions and negative values
-        if (app.Result is Model.Real && resultAsString.Contains("/")) {
-          reservedValues["real"].Add(int.Parse(Regex.Replace(
-            resultAsString, "\\.0$", "")));
-        }
-      }
-
-      foreach (var func in model.Functions) {
-        if (!Regex.IsMatch(func.Name, "^U_2_bv[0-9]+$")) {
-          continue;
-        }
-
-        var type = func.Name[4..];
-        if (!reservedValues.ContainsKey(type)) {
-          reservedValues[type] = new();
-        }
-
-        foreach (var app in func.Apps) {
-          reservedValues[type].Add(((Model.BitVector)app.Result).AsInt());
-        }
-      }
     }
 
     /// <summary>
@@ -320,20 +254,16 @@ namespace DafnyTestGeneration {
       List<string> lines = new();
 
       // test method parameters and declaration:
-      var parameters = string.Join(", ", ObjectsToMock
-        .Select(kVPair => $"{kVPair.id}:{kVPair.type}"));
+      var mockedLines = ObjectsToMock
+        .Select(kVPair => $"var {kVPair.id} := {freshMethods[kVPair.type]}();");
       var returnParNames = new List<string>();
       for (var i = 0; i < DafnyInfo.GetReturnTypes(MethodName).Count; i++) {
         returnParNames.Add("r" + i);
       }
 
-      var returnsDeclaration = string.Join(", ",
-        Enumerable.Range(0, returnParNames.Count).Select(i =>
-            $"{returnParNames[i]}:{DafnyInfo.GetReturnTypes(MethodName)[i]}"));
-      var modifiesClause = string.Join("",
-        ObjectsToMock.Select(i => $" modifies {i.id}"));
-      lines.Add($"method test{id}({parameters}) " +
-                $"returns ({returnsDeclaration}) {modifiesClause} {{");
+      lines.Add($"method {{:test}} test{id}() {{");
+      lines.AddRange(mockedLines);
+      // lines.AddRange(returnDeclarations);
 
       // assignments necessary to set up the test case:
       foreach (var assignment in Assignments) {
@@ -355,7 +285,7 @@ namespace DafnyTestGeneration {
 
       var returnValues = "";
       if (returnParNames.Count != 0) {
-        returnValues = string.Join(", ", returnParNames) + " := ";
+        returnValues = "var " + string.Join(", ", returnParNames) + " := ";
       }
 
       lines.Add(returnValues + methodCall);

@@ -44,7 +44,7 @@ namespace DafnyTestGeneration {
 
     protected bool ProcedureIsToBeTested(string procName) =>
       (ProcedureName == null || toModify.Contains(procName)) &&
-      procName.StartsWith("Impl$$") && !procName.EndsWith("__ctor");
+      (procName.StartsWith("Impl$$") || procName.StartsWith("CheckWellformed$$")) && !procName.EndsWith("__ctor");
 
     /// <summary>
     /// Add axioms necessary for counterexample generation to work efficiently
@@ -144,7 +144,11 @@ namespace DafnyTestGeneration {
         var calleName = $"Impl$${node.Name.Split("$").Last()}";
         var calleeProc = program.FindProcedure(calleName);
         if (calleeProc == null) {
-          return node; // Can happen if included modules are not verified
+          calleName = $"CheckWellformed$${node.Name.Split("$").Last()}";
+          calleeProc = program.FindProcedure(calleName);
+          if (calleeProc == null) {
+            return node; // Can happen if included modules are not verified
+          }
         }
 
         // consruct the call to the "Impl$$" implementation:
@@ -276,7 +280,7 @@ namespace DafnyTestGeneration {
         if (toTest == null) {
           // All methods are tested/modified
           node.Blocks[0].cmds.Insert(0, GetAssumeCmd(values));
-        } else if (implName.StartsWith("Impl$$")
+        } else if ((implName.StartsWith("Impl$$") || implName.StartsWith("CheckWellformed$$"))
                    && Utils.GetDafnyMethodName(implName).Equals(toTest)) {
           // This method is tested/modified
           node.Blocks[0].cmds.Insert(0, GetAssumeCmd(values));

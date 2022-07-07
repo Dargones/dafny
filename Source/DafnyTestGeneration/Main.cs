@@ -118,11 +118,15 @@ namespace DafnyTestGeneration {
       TestMethod.ClearTypesToSynthesize();
       var source = new StreamReader(sourceFile).ReadToEnd();
       var program = Utils.Parse(source, sourceFile);
+
       if (program == null) {
         yield break;
       }
       var dafnyInfo = new DafnyInfo(program);
       var rawName = Path.GetFileName(sourceFile).Split(".").First();
+
+      EnsuresToExpectVisitor visitor = new EnsuresToExpectVisitor();
+      visitor.Visit(program);
 
       string EscapeDafnyStringLiteral(string str) {
         return $"\"{str.Replace(@"\", @"\\")}\"";

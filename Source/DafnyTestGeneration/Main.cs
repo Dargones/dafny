@@ -125,9 +125,6 @@ namespace DafnyTestGeneration {
       var dafnyInfo = new DafnyInfo(program);
       var rawName = Path.GetFileName(sourceFile).Split(".").First();
 
-      EnsuresToExpectVisitor visitor = new EnsuresToExpectVisitor();
-      visitor.Visit(program);
-
       string EscapeDafnyStringLiteral(string str) {
         return $"\"{str.Replace(@"\", @"\\")}\"";
       }
@@ -143,7 +140,14 @@ namespace DafnyTestGeneration {
         }
       }
 
+      EnsuresToExpectVisitor visitor = new EnsuresToExpectVisitor();
+      visitor.Visit(program);
+
       await foreach (var method in GetTestMethodsForProgram(program)) {
+        var (Ins, Out) = visitor.MemberDeclNameToInsOutMapper[method.MethodName];
+        // TODO shouldn't need to generate expect for methods we've already tested
+        method.GenerateExpect(visitor.MemberDeclNameToEnsStr(method.MethodName),
+          Ins, Out, visitor.MemberDeclNameToFellowMembers(method.MethodName));
         yield return method.ToString();
       }
 

@@ -41,6 +41,10 @@ namespace DafnyTestGeneration {
     // terminate potential infinite recursion
     private List<string> getDefaultValueParams = new();
 
+    private List<string> returnParNames = new();
+
+    private List<string> expectLines = new();
+
     public TestMethod(DafnyInfo dafnyInfo, string log) {
       DafnyInfo = dafnyInfo;
       var typeNames = ExtractPrintedInfo(log, "Types | ");
@@ -50,6 +54,9 @@ namespace DafnyTestGeneration {
       argumentNames.RemoveAt(0);
       NOfTypeParams = dafnyInfo.GetNOfTypeParams(MethodName);
       ArgValues = ExtractInputs(dafnyModel.States.First(), argumentNames, typeNames);
+      for (var i = 0; i < DafnyInfo.GetReturnTypes(MethodName).Count; i++) {
+        returnParNames.Add("r" + i);
+      }
     }
 
     public static void ClearTypesToSynthesize() {
@@ -380,6 +387,27 @@ namespace DafnyTestGeneration {
       return new List<string>();
     }
 
+    public async void GenerateExpect(List<string> EnsLines, List<Microsoft.Dafny.Formal> Ins, 
+      List<Microsoft.Dafny.Formal> Outs, List<MemberDecl> FellowMembers) {
+      var receiver = ArgValues[0];
+      ArgValues.RemoveAt(0);
+      for (int l = 0; l < EnsLines.Count; l++) {
+        for (int i = 0; i < Ins.Count; i++) {
+          EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Ins[i].Name + @"(?![a-zA-Z\d])", ArgValues[i]);
+        }
+        for (int i = 0; i < Outs.Count; i++) {
+          EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Outs[i].Name + @"(?![a-zA-Z\d])", returnParNames[i]);
+        }
+        for (int i = 0; i < FellowMembers.Count; i++) {
+          EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])(this\." + 
+            FellowMembers[i].Name + @"|" + FellowMembers[i].Name +
+            @")(?![a-zA-Z\d])", $"{receiver}.{FellowMembers[i].Name}");
+        }
+        expectLines.Add($"expect {EnsLines[l]};");
+      }
+      ArgValues.Insert(0, receiver);
+    }
+
     /// <summary>  Return the test method as a list of lines of code </summary>
     private List<string> TestMethodLines() {
       
@@ -404,11 +432,6 @@ namespace DafnyTestGeneration {
         } else {
           datatypeCreation.Add($"var {line.id} : {line.type} := {line.value};");
         }
-      }
-
-      var returnParNames = new List<string>();
-      for (var i = 0; i < DafnyInfo.GetReturnTypes(MethodName).Count; i++) {
-        returnParNames.Add("r" + i);
       }
 
       lines.Add($"method {{:test}} test{id}() {{");
@@ -443,6 +466,7 @@ namespace DafnyTestGeneration {
       }
 
       lines.Add(returnValues + methodCall);
+      lines.AddRange(expectLines);
       lines.Add("}");
 
       return lines;

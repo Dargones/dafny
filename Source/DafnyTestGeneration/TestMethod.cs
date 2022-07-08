@@ -389,23 +389,39 @@ namespace DafnyTestGeneration {
 
     public async void GenerateExpect(List<string> EnsLines, List<Microsoft.Dafny.Formal> Ins, 
       List<Microsoft.Dafny.Formal> Outs, List<MemberDecl> FellowMembers) {
-      var receiver = ArgValues[0];
-      ArgValues.RemoveAt(0);
-      for (int l = 0; l < EnsLines.Count; l++) {
-        for (int i = 0; i < Ins.Count; i++) {
-          EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Ins[i].Name + @"(?![a-zA-Z\d])", ArgValues[i]);
+      if (!DafnyInfo.IsStatic(MethodName)) {
+        var receiver = ArgValues[0];
+        ArgValues.RemoveAt(0);
+        for (int l = 0; l < EnsLines.Count; l++) {
+          for (int i = 0; i < Ins.Count; i++) {
+            EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Ins[i].Name + @"(?![a-zA-Z\d])", ArgValues[i]);
+          }
+          for (int i = 0; i < Outs.Count; i++) {
+            EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Outs[i].Name + @"(?![a-zA-Z\d])", returnParNames[i]);
+          }
+          for (int i = 0; i < FellowMembers.Count; i++) {
+            EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])(this\." + 
+              FellowMembers[i].Name + @"|" + FellowMembers[i].Name +
+              @")(?![a-zA-Z\d])", $"{receiver}.{FellowMembers[i].Name}");
+          }
+          expectLines.Add($"expect {EnsLines[l]};");
         }
-        for (int i = 0; i < Outs.Count; i++) {
-          EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Outs[i].Name + @"(?![a-zA-Z\d])", returnParNames[i]);
+        ArgValues.Insert(0, receiver);
+      } else {
+        for (int l = 0; l < EnsLines.Count; l++) {
+          for (int i = 0; i < Ins.Count; i++) {
+            EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Ins[i].Name + @"(?![a-zA-Z\d])", ArgValues[i]);
+          }
+          for (int i = 0; i < Outs.Count; i++) {
+            EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])" + Outs[i].Name + @"(?![a-zA-Z\d])", returnParNames[i]);
+          }
+          // for (int i = 0; i < FellowMembers.Count; i++) {
+          //   EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])(this\." + 
+          //     FellowMembers[i].Name + @"|" + FellowMembers[i].Name +
+          //     @")(?![a-zA-Z\d])", $"{receiver}.{FellowMembers[i].Name}");
+          // }
         }
-        for (int i = 0; i < FellowMembers.Count; i++) {
-          EnsLines[l] = Regex.Replace(EnsLines[l], @"(?<![a-zA-Z\d])(this\." + 
-            FellowMembers[i].Name + @"|" + FellowMembers[i].Name +
-            @")(?![a-zA-Z\d])", $"{receiver}.{FellowMembers[i].Name}");
-        }
-        expectLines.Add($"expect {EnsLines[l]};");
       }
-      ArgValues.Insert(0, receiver);
     }
 
     /// <summary>  Return the test method as a list of lines of code </summary>

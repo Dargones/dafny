@@ -1,7 +1,7 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Function = Microsoft.Dafny.Function;
 using IdentifierExpr = Microsoft.Dafny.IdentifierExpr;
@@ -113,7 +113,7 @@ namespace DafnyTestGeneration {
 
     public List<TypeParameter> GetTypeArgsWithParents(string callable) {
       List<TypeParameter> result = new List<TypeParameter>();
-      TopLevelDecl? clazz;
+      TopLevelDecl/*?*/ clazz;
       if (methods.ContainsKey(callable)) {
         result.AddRange(methods[callable].TypeArgs);
         clazz = methods[callable].EnclosingClass;
@@ -169,7 +169,7 @@ namespace DafnyTestGeneration {
       return false;
     }
 
-    public string? GetWitnessForType(Type type) {
+    public string/*?*/ GetWitnessForType(Type type) {
       if (type is not UserDefinedType userDefinedType ||
           !witnessForType.ContainsKey(userDefinedType.Name)) {
         return null;
@@ -180,7 +180,7 @@ namespace DafnyTestGeneration {
           "").CloneExpr(witnessForType[userDefinedType.Name]));
     }
 
-    public Type? GetSupersetType(Type type) {
+    public Type/*?*/ GetSupersetType(Type type) {
       if (type is not UserDefinedType userDefinedType ||
           !subsetToSuperset.ContainsKey(userDefinedType.Name)) {
         return null;
@@ -247,7 +247,7 @@ namespace DafnyTestGeneration {
       throw new Exception("Cannot identify callable " + callableName);
     }
 
-    public Expression? GetTypeCondition(Type type, string name) {
+    public Expression/*?*/ GetTypeCondition(Type type, string name) {
       if (type is not UserDefinedType userDefinedType ||
           !conditionForType.ContainsKey(userDefinedType.Name)) {
         return null;
@@ -258,7 +258,7 @@ namespace DafnyTestGeneration {
       return new ClonerWithSubstitution(this, subst, name).CloneValidOrNull(condition);
     }
 
-    public List<(string name, Type type, bool mutable, string? defValue)> GetNonGhostFields(UserDefinedType? type) {
+    public List<(string name, Type type, bool mutable, string/*?*/ defValue)> GetNonGhostFields(UserDefinedType/*?*/ type) {
       if (type == null || !Classes.ContainsKey(type.Name)) {
         throw new Exception("Cannot identify class " + type?.Name ??
                             " (null) ");
@@ -268,7 +268,7 @@ namespace DafnyTestGeneration {
         .Where(field => !field.IsGhost);
       var result = new List<(string name, Type type, bool mutable, string defValue)>();
       foreach (var field in relevantFields) {
-        string? defValue = null;
+        string/*?*/ defValue = null;
         if (field is ConstantField constantField && constantField.Rhs != null) {
           var defExpression = new ClonerWithSubstitution(
             this,
@@ -287,7 +287,7 @@ namespace DafnyTestGeneration {
       return result;
     }
 
-    public bool IsTrait(UserDefinedType? type) {
+    public bool IsTrait(UserDefinedType/*?*/ type) {
       if (type == null || !Classes.ContainsKey(type.Name)) {
         throw new Exception("Cannot identify class " + type?.Name ??
                             " (null) ");
@@ -295,7 +295,7 @@ namespace DafnyTestGeneration {
       return Classes[type.Name] is TraitDecl;
     }
 
-    public List<Type>? GetTypesForTrait(UserDefinedType? type) {
+    public List<Type>/*?*/ GetTypesForTrait(UserDefinedType/*?*/ type) {
       if (!IsTrait(type) || Classes[type.Name] is not TraitDecl traitDecl) {
         return null;
       }
@@ -317,7 +317,7 @@ namespace DafnyTestGeneration {
       return result;
     }
 
-    public List<string> GetEnsuresForTrait(UserDefinedType? type, string name, Dictionary<string, string> arguments) {
+    public List<string> GetEnsuresForTrait(UserDefinedType/*?*/ type, string name, Dictionary<string, string> arguments) {
       var result = new List<string>();
       var traitDecl = (TraitDecl)Classes[type.Name];
       foreach (var member in traitDecl.Members) {
@@ -348,7 +348,7 @@ namespace DafnyTestGeneration {
       }
       return result;
     }
-    public bool IsExtern(UserDefinedType? type) {
+    public bool IsExtern(UserDefinedType/*?*/ type) {
       if (type == null || !Classes.ContainsKey(type.Name)) {
         throw new Exception("Cannot identify class " + type?.Name ??
                             " (null) ");
@@ -357,14 +357,14 @@ namespace DafnyTestGeneration {
       return Classes[type.Name].IsExtern(out qualification, out name);
     }
 
-    public Constructor? GetConstructor(UserDefinedType? type) {
+    public Constructor/*?*/ GetConstructor(UserDefinedType/*?*/ type) {
       if (type == null || !Classes.ContainsKey(type.Name)) {
         throw new Exception("Cannot identify class " + type?.Name ??
                             " (null) ");
       }
       return Classes[type.Name].Members.OfType<Constructor>()
         .OrderBy(constructor => constructor.Ins.Count())
-        .FirstOrDefault((Constructor?)null);
+        .FirstOrDefault((Constructor/*?*/)null);
     }
 
     /// <summary>
@@ -399,7 +399,7 @@ namespace DafnyTestGeneration {
       }
 
       private void VisitUserDefinedTypeDeclaration(string newTypeName,
-        Type baseType, Expression? witness, List<TypeParameter> typeArgs) {
+        Type baseType, Expression/*?*/ witness, List<TypeParameter> typeArgs) {
         if (witness != null) {
           info.witnessForType[newTypeName] = witness;
           if (DafnyOptions.O.TestGenOptions.Verbose) {
@@ -588,7 +588,7 @@ namespace DafnyTestGeneration {
             return base.CloneExpr(expr);
         }
       }
-      public Expression? CloneValidOrNull(Expression expr) {
+      public Expression/*?*/ CloneValidOrNull(Expression expr) {
         var result = CloneExpr(expr);
         return isValidExpression ? result : null;
       }

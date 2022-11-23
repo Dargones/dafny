@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,7 +7,6 @@ using System.Text.RegularExpressions;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Program = Microsoft.Dafny.Program;
-using System.Diagnostics;
 
 namespace DafnyTestGeneration {
 
@@ -19,11 +19,11 @@ namespace DafnyTestGeneration {
     /// loop unrolling may cause false negatives.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program) {
+    public async static IAsyncEnumerable<string> GetDeadCodeStatistics(Program program) {
 
       DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
       ProgramModification.ResetStatistics();
-      var modifications = GetModifications(program).ToEnumerable().ToList();
+      var modifications = GetModifications(program).ToList();
       var blocksReached = modifications.Count;
       HashSet<string> allStates = new();
       HashSet<string> allDeadStates = new();
@@ -66,7 +66,7 @@ namespace DafnyTestGeneration {
       }
     }
 
-    private static IAsyncEnumerable<ProgramModification> GetModifications(Program program) {
+    private static IEnumerable<ProgramModification> GetModifications(Program program) {
       var dafnyInfo = new DafnyInfo(program);
       // Translate the Program to Boogie:
       var oldPrintInstrumented = DafnyOptions.O.PrintInstrumented;
@@ -88,7 +88,7 @@ namespace DafnyTestGeneration {
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program) {
+    public async static IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program) {
 
       DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
       ProgramModification.ResetStatistics();
@@ -100,7 +100,7 @@ namespace DafnyTestGeneration {
       var numTestsGenerated = 0;
       HashSet<string> blocksToSkip = DafnyOptions.O.TestGenOptions.blocksToSkip;
 
-      await foreach (var modification in GetModifications(program)) {
+      foreach (var modification in GetModifications(program)) {
         var blockCapturedState = "";
         if (DafnyOptions.O.TestGenOptions.maxTests >= 0) {
           if (numTestsGenerated >= DafnyOptions.O.TestGenOptions.maxTests) {
@@ -169,7 +169,7 @@ namespace DafnyTestGeneration {
     /// <summary>
     /// Return a Dafny class (list of lines) with tests for the given Dafny file
     /// </summary>
-    public static async IAsyncEnumerable<string> GetTestClassForProgram(string sourceFile) {
+    public async static IAsyncEnumerable<string> GetTestClassForProgram(string sourceFile) {
 
       DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
       TestMethod.ClearTypesToSynthesize();

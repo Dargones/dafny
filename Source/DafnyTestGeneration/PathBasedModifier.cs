@@ -1,3 +1,4 @@
+#nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Boogie;
@@ -14,9 +15,9 @@ namespace DafnyTestGeneration {
     private const string BlockVarNamePrefix = "notYetVisited";
     private List<Path> paths = new();
 
-    protected override async IAsyncEnumerable<ProgramModification> GetModifications(Program p) {
+    protected override IEnumerable<ProgramModification> GetModifications(Program p) {
       paths = new List<Path>();
-      p = VisitProgram(p); // populates paths
+      VisitProgram(p); // populates paths
       foreach (var path in paths) {
         path.AssertPath();
         var name = ImplementationToTarget?.VerboseName ?? path.Impl.VerboseName;
@@ -27,14 +28,20 @@ namespace DafnyTestGeneration {
       }
     }
 
+    private void VisitProgram(Program node) {
+      foreach (var implementation in node.Implementations) {
+        VisitImplementation(implementation);
+      }
+    }
+
     /// <summary>
     /// Insert variables to register which blocks are visited
     /// and then populate the paths field.
     /// </summary>
-    public override Implementation VisitImplementation(Implementation node) {
+    private void VisitImplementation(Implementation node) {
       if (!ImplementationIsToBeTested(node) ||
           !dafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
-        return node;
+        return;
       }
       var blockToVariable = InitBlockVars(node);
       GeneratePaths(node,
@@ -42,7 +49,6 @@ namespace DafnyTestGeneration {
         node.Blocks[0],
         new HashSet<Variable>(),
         new List<Variable>());
-      return node;
     }
 
     /// <summary>

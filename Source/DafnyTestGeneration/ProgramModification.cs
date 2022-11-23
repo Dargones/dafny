@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -31,9 +32,9 @@ namespace DafnyTestGeneration {
     public readonly HashSet<string> CapturedStates;
 
     private readonly string procedure; // procedure to start verification from
-    private Program? program;
+    private Program/*?*/ program;
     internal readonly HashSet<int> coversBlocks;
-    private string? counterexampleLog;
+    private string/*?*/ counterexampleLog;
     private TestMethod testMethod;
 
     public static ProgramModification GetProgramModification(Program program,
@@ -96,7 +97,7 @@ namespace DafnyTestGeneration {
     /// version of the original boogie program. Return null if this
     /// counterexample does not cover any new SourceModifications.
     /// </summary>
-    public async Task<string?> GetCounterExampleLog() {
+    public async Task<string>/*?*/ GetCounterExampleLog() {
       if (CounterexampleStatus != Status.Untested ||
           (coversBlocks.Count != 0 && IsCovered)) {
         return counterexampleLog;
@@ -112,10 +113,10 @@ namespace DafnyTestGeneration {
       engine.CollectModSets(program);
       engine.Inline(program);
       var writer = new StringWriter();
-      var result = Task.WhenAny(engine.InferAndVerify(writer, program,
+      var result = await Task.WhenAny(engine.InferAndVerify(writer, program,
           new PipelineStatistics(), null,
           _ => { }, guid),
-        Task.Delay(TimeSpan.FromSeconds(oldOptions.TimeLimit))).Result;
+        Task.Delay(TimeSpan.FromSeconds(oldOptions.TimeLimit)));
       program = null; // allows to garbage collect what is no longer needed
       CounterexampleStatus = Status.Failure;
       counterexampleLog = null;

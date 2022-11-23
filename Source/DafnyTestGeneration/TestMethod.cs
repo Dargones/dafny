@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -208,7 +209,7 @@ namespace DafnyTestGeneration {
     /// Extract the value of a variable. This can have side-effects on
     /// assignments, reservedValues, reservedValuesMap, and objectsToMock.
     /// </summary>
-    private string ExtractVariable(DafnyModelVariable variable, Type? asType) {
+    private string ExtractVariable(DafnyModelVariable variable, Type/*?*/ asType) {
       if (variable == null) {
         if (asType != null) {
           return GetDefaultValue(asType);
@@ -259,7 +260,7 @@ namespace DafnyTestGeneration {
           var asBasicSeqType = GetBasicType(asType, type => type is SeqType) as SeqType;
           string seqName;
           var seqVar = variable as SeqVariable;
-          if (seqVar?.GetLength() == null) {
+          if (seqVar?.GetLength() == -1) {
             seqName = "d" + nextValueId++;
             ValueCreation.Add(seqType.Arg is CharType
               ? (seqName, asType ?? variableType, "\"\"")
@@ -270,10 +271,10 @@ namespace DafnyTestGeneration {
             var element = seqVar?[i];
             if (element == null) {
               getDefaultValueParams = new();
-              elements.Add(GetDefaultValue(seqType.Arg, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type?)null)));
+              elements.Add(GetDefaultValue(seqType.Arg, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
               continue;
             }
-            elements.Add(ExtractVariable(element, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type?)null)));
+            elements.Add(ExtractVariable(element, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
           }
           seqName = "d" + nextValueId++;
 
@@ -284,7 +285,6 @@ namespace DafnyTestGeneration {
           int largeStringSize = 200;
           if (seqType.Arg is CharType && elements.Count > largeStringSize) {
             int i = 0;
-            string outstr = "";
             int chunksize = 100;
             List<string> chunkStrs = new List<string>();
             while (i < elements.Count) {
@@ -310,7 +310,7 @@ namespace DafnyTestGeneration {
             return setName;
           }
           foreach (var element in variable.Children["true"]) {
-            elements.Add(ExtractVariable(element, asBasicSetType?.TypeArgs?.FirstOrDefault((Type?)null)));
+            elements.Add(ExtractVariable(element, asBasicSetType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
           }
           setName = "d" + nextValueId++;
           ValueCreation.Add((setName, asType ?? variableType, $"{{{string.Join(", ", elements)}}}"));
@@ -427,7 +427,7 @@ namespace DafnyTestGeneration {
       return varId;
     }
 
-    private string GetClassTypeInstance(UserDefinedType type, Type? asType, DafnyModelVariable? variable) {
+    private string GetClassTypeInstance(UserDefinedType type, Type/*?*/ asType, DafnyModelVariable/*?*/ variable) {
       var asBasicType = GetBasicType(asType, _ => false);
       if ((asBasicType != null) && (asBasicType is not UserDefinedType)) {
         return GetDefaultValue(asType, asType);
@@ -487,7 +487,7 @@ namespace DafnyTestGeneration {
       return varId;
     }
 
-    private string GetFieldValue((string name, Type type, bool mutable, string? defValue) field, DafnyModelVariable? variable) {
+    private string GetFieldValue((string name, Type type, bool mutable, string/*?*/ defValue) field, DafnyModelVariable/*?*/ variable) {
       if (field.defValue != null) {
         return field.defValue;
       }
@@ -501,7 +501,7 @@ namespace DafnyTestGeneration {
       return GetDefaultValue(field.type, field.type);
     }
 
-    private static string GetPrimitiveAsType(string value, Type? asType) {
+    private static string GetPrimitiveAsType(string value, Type/*?*/ asType) {
       if ((asType is null or IntType or RealType or BoolType or CharType
           or BitvectorType) || value is "[]" or "{}" or "map[]") {
         return value;
@@ -519,7 +519,7 @@ namespace DafnyTestGeneration {
     /// An unspecified value is such a value for which a model does reserve
     /// an element (e.g. T@U!val!25).
     /// </summary>
-    private string GetDefaultValue(Type type, Type? asType = null) {
+    private string GetDefaultValue(Type type, Type/*?*/ asType = null) {
       if (type == null) {
         errorMessages.Add("// Failed - cannot determine type");
         return "";
@@ -764,7 +764,7 @@ namespace DafnyTestGeneration {
       return hashCode;
     }
 
-    public override bool Equals(object? obj) {
+    public override bool Equals(object/*?*/ obj) {
       if (obj is not TestMethod other) {
         return false;
       }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿#nullable disable
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -24,12 +25,12 @@ namespace DafnyTestGeneration {
   /// of a Boogie program with assertions that fail when a particular
   /// condition is met (such as when a block is visited or a path is taken)
   /// </summary>
-  public abstract class ProgramModifier : ReadOnlyVisitor {
+  public abstract class ProgramModifier {
 
     // The implementation to test.
     // If null, all implementations will be tested.
     // If not null, other implementations can be inlined.
-    protected Implementation? ImplementationToTarget;
+    protected Implementation/*?*/ ImplementationToTarget;
     // Boogie names of implementations to be tested or inlined
     private HashSet<string> toModify = new();
     protected DafnyInfo dafnyInfo;
@@ -37,7 +38,7 @@ namespace DafnyTestGeneration {
     /// <summary>
     /// Create tests and return the list of bpl test files
     /// </summary>
-    public IAsyncEnumerable<ProgramModification> GetModifications(IEnumerable<Program> programs, DafnyInfo dafnyInfo) {
+    public IEnumerable<ProgramModification> GetModifications(IEnumerable<Program> programs, DafnyInfo dafnyInfo) {
       this.dafnyInfo = dafnyInfo;
       if (DafnyOptions.O.TestGenOptions.Verbose) {
         Console.WriteLine("// Merging boogie files...");
@@ -84,7 +85,7 @@ namespace DafnyTestGeneration {
       return GetModifications(program);
     }
 
-    protected abstract IAsyncEnumerable<ProgramModification> GetModifications(Program p);
+    protected abstract IEnumerable<ProgramModification> GetModifications(Program p);
 
     protected bool ImplementationIsToBeTested(Implementation impl) =>
       (ImplementationToTarget == null || toModify.Contains(impl.Name)) &&
@@ -116,7 +117,7 @@ namespace DafnyTestGeneration {
         program.AddTopLevelDeclarations(p.TopLevelDeclarations);
       }
       // Remove duplicates afterwards:
-      var declarations = new Dictionary<string, HashSet<string?>>();
+      var declarations = new Dictionary<string, HashSet<string/*?*/>>();
       var axioms = new HashSet<string>();
       var toRemove = new List<Declaration>();
       foreach (var declaration in program.TopLevelDeclarations) {
@@ -188,9 +189,9 @@ namespace DafnyTestGeneration {
     private class AddImplementationsForCalls : ReadOnlyVisitor {
 
       private List<Implementation> implsToAdd = new();
-      private Program? program;
+      private Program/*?*/ program;
 
-      public override Procedure? VisitProcedure(Procedure? node) {
+      public override Procedure/*?*/ VisitProcedure(Procedure/*?*/ node) {
         if (node == null || !node.Name.StartsWith("Call$$") ||
             node.Name.EndsWith("__ctor")) {
           return node;
@@ -261,7 +262,7 @@ namespace DafnyTestGeneration {
 
       // maps name of an implementation to those implementations that it calls
       private readonly Dictionary<string, List<string>> calls = new();
-      private string? impl;
+      private string/*?*/ impl;
 
       public override Implementation VisitImplementation(Implementation node) {
         impl = node.Name;
@@ -281,7 +282,7 @@ namespace DafnyTestGeneration {
       /// Return the set of implementations that might be called as a result
       /// of calling the given implementation
       /// </summary>
-      public HashSet<string> GetCallees(string? caller, uint depth) {
+      public HashSet<string> GetCallees(string/*?*/ caller, uint depth) {
         var result = new HashSet<string>();
         if (caller == null) {
           return result;
@@ -317,7 +318,7 @@ namespace DafnyTestGeneration {
     /// </summary>
     private class AnnotationVisitor : StandardVisitor {
 
-      private Implementation? implementation;
+      private Implementation/*?*/ implementation;
       private readonly ProgramModifier modifier;
 
       public AnnotationVisitor(ProgramModifier modifier) {
@@ -378,14 +379,14 @@ namespace DafnyTestGeneration {
     /// </summary>
     private class FunctionToMethodCallRewriter : StandardVisitor {
 
-      private Implementation? currImpl;
-      private Program? currProgram;
-      private Block? currBlock;
-      private AssignCmd? currAssignCmd;
+      private Implementation/*?*/ currImpl;
+      private Program/*?*/ currProgram;
+      private Block/*?*/ currBlock;
+      private AssignCmd/*?*/ currAssignCmd;
 
       // This list is populated while traversing a block and then the respective
       // commands are inserted in that block at specified positions
-      private List<(Cmd cmd, Cmd before)>? commandsToInsert;
+      private List<(Cmd cmd, Cmd before)>/*?*/ commandsToInsert;
       private readonly ProgramModifier modifier;
       private Dictionary<string, Function> functionMap;
 
@@ -396,8 +397,8 @@ namespace DafnyTestGeneration {
       /// </summary>
       /// <returns>The identifier for the temporary variable that
       /// stores the result of the method call</returns>
-      private IdentifierExpr? TryConvertFunctionCall(NAryExpr call) {
-        Procedure? proc = currProgram?.Procedures
+      private IdentifierExpr/*?*/ TryConvertFunctionCall(NAryExpr call) {
+        Procedure/*?*/ proc = currProgram?.Procedures
           .Where(f => f.Name == "Impl$$" + call.Fun.FunctionName)
           .FirstOrDefault((Procedure)null);
         if (proc == null) {
@@ -474,7 +475,7 @@ namespace DafnyTestGeneration {
       }
 
       public override Implementation VisitImplementation(Implementation node) {
-        Function? findFunction =
+        Function/*?*/ findFunction =
           functionMap.GetValueOrDefault(node.Name[6..], null);
         if (!node.Name.StartsWith("Impl$$") ||
             findFunction == null) {
@@ -517,16 +518,16 @@ namespace DafnyTestGeneration {
     /// </summary>
     private class RemoveFunctionsFromShortCircuitRewriter : StandardVisitor {
 
-      private AssignCmd? currAssignCmd;
-      private Implementation? currImpl;
-      private Program? currProgram;
+      private AssignCmd/*?*/ currAssignCmd;
+      private Implementation/*?*/ currImpl;
+      private Program/*?*/ currProgram;
       // maps the string representation of a function call to a local variable
       // that stores the result
-      private Dictionary<string, LocalVariable>? funcCallToResult;
+      private Dictionary<string, LocalVariable>/*?*/ funcCallToResult;
       // suffix added to all canCall functions:
       private const string CanCallSuffix = "#canCall";
       // new commands to insert in the currently traversed block
-      private List<(Cmd cmd, Cmd after)>? commandsToInsert;
+      private List<(Cmd cmd, Cmd after)>/*?*/ commandsToInsert;
       private readonly ProgramModifier modifier;
       private Dictionary<string, Function> functionMap;
       private Dictionary<string, Procedure> procedureMap;
@@ -544,9 +545,9 @@ namespace DafnyTestGeneration {
       /// the result of that function call
       /// </summary>
       public override Expr VisitNAryExpr(NAryExpr node) {
-        Function? findFunction =
+        Function/*?*/ findFunction =
           functionMap.GetValueOrDefault(node.Fun.FunctionName + CanCallSuffix, null);
-        Procedure? findProcedure =
+        Procedure/*?*/ findProcedure =
           procedureMap.GetValueOrDefault("Impl$$" + node.Fun.FunctionName,
             null);
         if (currAssignCmd == null ||
@@ -590,14 +591,14 @@ namespace DafnyTestGeneration {
           return node;
         }
 
-        Implementation? findImplementation =
+        Implementation/*?*/ findImplementation =
           implementationMap.GetValueOrDefault(
             "Impl$$" + expr.Fun.FunctionName[..^CanCallSuffix.Length], null);
         if (findImplementation == null) {
           return node;
         }
 
-        Function? func = currProgram.Functions
+        Function/*?*/ func = currProgram.Functions
           .Where(f => f.Name == expr.Fun.FunctionName[..^CanCallSuffix.Length])
           .FirstOrDefault((Function)null);
         if (func == null) {

@@ -1,4 +1,4 @@
-using System;
+#nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Boogie;
@@ -15,13 +15,13 @@ namespace DafnyTestGeneration {
   /// </summary>
   public class BlockBasedModifier : ProgramModifier {
 
-    private Implementation? implementation; // the implementation currently traversed
-    private Program? program; // the original program
+    private Implementation/*?*/ implementation; // the implementation currently traversed
+    private Program/*?*/ program; // the original program
 
-    protected override IAsyncEnumerable<ProgramModification> GetModifications(Program p) {
+    protected override IEnumerable<ProgramModification> GetModifications(Program p) {
       return VisitProgram(p);
     }
-    private ProgramModification? VisitBlock(Block node) {
+    private ProgramModification/*?*/ VisitBlock(Block node) {
       var captured = ExtractCapturedStates(node);
       if (captured.Count > 0 && DafnyOptions.O.TestGenOptions.blocksToSkip.Contains(captured.ToList().First())) {
         return null;
@@ -30,7 +30,6 @@ namespace DafnyTestGeneration {
       if (program == null || implementation == null) {
         return null;
       }
-      base.VisitBlock(node);
       if (node.cmds.Count == 0) { // ignore blocks with zero commands
         return null;
       }
@@ -49,7 +48,7 @@ namespace DafnyTestGeneration {
       return record;
     }
 
-    private async IAsyncEnumerable<ProgramModification> VisitImplementation(
+    private IEnumerable<ProgramModification> VisitImplementation(
       Implementation node) {
       implementation = node;
       if (!ImplementationIsToBeTested(node) ||
@@ -67,10 +66,10 @@ namespace DafnyTestGeneration {
 
     }
 
-    private async IAsyncEnumerable<ProgramModification> VisitProgram(Program node) {
+    private IEnumerable<ProgramModification> VisitProgram(Program node) {
       program = node;
       foreach (var implementation in node.Implementations) {
-        await foreach (var modification in VisitImplementation(implementation)) {
+        foreach (var modification in VisitImplementation(implementation)) {
           yield return modification;
         }
       }

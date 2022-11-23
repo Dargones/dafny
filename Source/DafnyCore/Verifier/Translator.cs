@@ -1276,6 +1276,7 @@ namespace Microsoft.Dafny {
         { $Is(c#0, Tclass._System.object()) } 
         $Is(c#0, Tclass._System.object())
            <==> $Is(c#0, Tclass._System.object?()) && c#0 != null);
+
       // _System.object: subset type $IsAlloc
       axiom (forall c#0: ref, $h: Heap :: 
         { $IsAlloc(c#0, Tclass._System.object(), $h) } 
@@ -4001,6 +4002,7 @@ namespace Microsoft.Dafny {
       /*
       DR: I conjecture that this should be enough,
           as the requires is preserved when the frame is:
+
       wellFormed = Bpl.Expr.And(wellFormed,
         Bpl.Expr.Or(new Bpl.NAryExpr(f.tok, canCall, f0argsCanCall), fwf0));
       */
@@ -5985,6 +5987,7 @@ namespace Microsoft.Dafny {
 
         // frame axiom
         /*
+
           forall t0..tN+1 : Ty, h0, h1 : Heap, f : Handle, bx1 .. bxN : Box,
             HeapSucc(h0, h1) && GoodHeap(h0) && GoodHeap(h1)
             && Is[&IsAllocBox](bxI, tI, h0)              // in h0, not hN
@@ -5997,6 +6000,7 @@ namespace Microsoft.Dafny {
           ==>  Reads(..h0..) == Reads(..h1..)
            AND Requires(f,h0,bxs) == Requires(f,h1,bxs) // which is needed for the next
            AND  Apply(f,h0,bxs) == Apply(f,h0,bxs)
+
            The [...] expressions are omitted for /allocated:0 and /allocated:1:
              - in these modes, functions are pure values and IsAlloc of a function is trivially true
              - o may be unallocated even if f reads it, so we require a stronger condition that

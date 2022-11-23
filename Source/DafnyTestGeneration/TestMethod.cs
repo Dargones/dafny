@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using DafnyServer.CounterexampleGeneration;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
+using Microsoft.Dafny.LanguageServer.CounterExampleGeneration;
 using MapType = Microsoft.Dafny.MapType;
 using Type = Microsoft.Dafny.Type;
 
@@ -125,7 +126,7 @@ namespace DafnyTestGeneration {
     /// <returns></returns>
     private List<string> ExtractInputs(DafnyModelState state, IReadOnlyList<string> printOutput, IReadOnlyList<string> types) {
       var result = new List<string>();
-      var vars = state.ExpandedVariableSet(null);
+      var vars = state.ExpandedVariableSet(-1);
       var parameterIndex = DafnyInfo.IsStatic(MethodName) ? -1 : -2;
       for (var i = 0; i < printOutput.Count; i++) {
         if (types[i] == "Ty") {

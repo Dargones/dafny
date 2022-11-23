@@ -1,8 +1,9 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Collections.Immutable;
 using System.Linq;
+using System.Text;
 using DafnyServer.CounterexampleGeneration;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
@@ -66,7 +67,7 @@ namespace DafnyTestGeneration {
       new Resolver(program).ResolveProgram(program);
       return program;
     }
-
+    
     /// <summary>
     /// Deep clone a Boogie program.
     /// </summary>

@@ -56,7 +56,7 @@ namespace DafnyTestGeneration {
           !dafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
         yield break;
       }
-      
+
       // TODO: Verify that this performs topological sort
       for (int i = node.Blocks.Count - 1; i >= 0; i--) {
         var modification = VisitBlock(node.Blocks[i]);

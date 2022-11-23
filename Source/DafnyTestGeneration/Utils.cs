@@ -67,7 +67,7 @@ namespace DafnyTestGeneration {
       new Resolver(program).ResolveProgram(program);
       return program;
     }
-    
+
     /// <summary>
     /// Deep clone a Boogie program.
     /// </summary>

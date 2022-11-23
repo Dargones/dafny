@@ -56,94 +56,15 @@ namespace DafnyTestGeneration {
           !dafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
         yield break;
       }
-
-      switch (DafnyOptions.O.TestGenOptions.Minimization) {
-        case TestGenerationOptions.Minimizations.Random:
-          var random = new Random();
-          foreach (var block in node.Blocks.OrderBy(_ => random.Next())) {
-            var modification = VisitBlock(block);
-            if (modification != null) {
-              yield return modification;
-            }
-          }
-          break;
-        case TestGenerationOptions.Minimizations.Topological:
-          // TODO: Verify that this performs topological sort
-          for (int i = node.Blocks.Count - 1; i >= 0; i--) {
-            var modification = VisitBlock(node.Blocks[i]);
-            if (modification != null) {
-              yield return modification;
-            }
-          }
-          break;
-        case TestGenerationOptions.Minimizations.Optimal:
-          var variables = PathBasedModifier.InitBlockVars(node);
-          var allPathsFeasible = false;
-          int bestResult = 0;
-          int minPaths = 1;
-          var returnBlocks = node.Blocks
-            .Where(block => block.TransferCmd is ReturnCmd).ToList();
-          List<ProgramModification> bestResultPaths = new();
-          List<ProgramModification> currentAttempt = new();
-          List<HashSet<Block>> infeasiblePaths = new();
-          HashSet<ProgramModification> allPaths = new();
-          node.ComputePredecessorsForBlocks();
-          while (!allPathsFeasible) {
-            currentAttempt.ForEach(modification => modification.ToBeIgnored = true);
-            currentAttempt = new List<ProgramModification>();
-            var newPaths = MinCover.GetMinCover(node, infeasiblePaths, minPaths);
-            if (newPaths.Count == 0) {
-              break;
-            }
-            minPaths = newPaths.Count;
-            allPathsFeasible = true;
-            foreach (var pathDescription in newPaths.OrderBy(p => p.Count)) {
-              ProgramModification modification;
-              var blockIds = pathDescription.Select(block => block.UniqueId).ToHashSet();
-              var substitution = allPaths
-                .Where(path =>
-                  path.CounterexampleStatus ==
-                  ProgramModification.Status.Success &&
-                  path.coversBlocks.IsSupersetOf(blockIds))
-                .FirstOrDefault((ProgramModification)null);
-              if (substitution == null) {
-                var path = new PathBasedModifier.Path(node,
-                  pathDescription.Select(block => variables[block]),
-                  returnBlocks);
-                path.AssertPath();
-                var name = ImplementationToTarget?.VerboseName ??
-                           path.Impl.VerboseName;
-                modification = ProgramModification.GetProgramModification(
-                  program, path.Impl,
-                  blockIds, new HashSet<string>(), name,
-                  $"{name.Split(" ")[0]}(path through {string.Join(",", blockIds)})");
-                path.NoAssertPath();
-              } else {
-                modification = substitution;
-              }
-              modification.ToBeIgnored = false;
-              currentAttempt.Add(modification);
-              allPaths.Add(modification);
-              if (allPathsFeasible) {
-                await modification.GetCounterExampleLog();
-                if (!modification.IsCovered) {
-                  infeasiblePaths.Add(pathDescription);
-                  allPathsFeasible = false;
-                }
-              }
-            }
-            if (ProgramModification.NumberOfBlocksCovered(node) > bestResult) {
-              bestResultPaths = new List<ProgramModification>();
-              bestResultPaths.AddRange(currentAttempt);
-            }
-          }
-          currentAttempt.ForEach(modification => modification.ToBeIgnored = true);
-          bestResultPaths.ForEach(modification => modification.ToBeIgnored = false);
-          foreach (var modification in bestResultPaths) {
-            yield return modification;
-          }
-          break;
+      
+      // TODO: Verify that this performs topological sort
+      for (int i = node.Blocks.Count - 1; i >= 0; i--) {
+        var modification = VisitBlock(node.Blocks[i]);
+        if (modification != null) {
+          yield return modification;
+        }
       }
+
     }
 
     private async IAsyncEnumerable<ProgramModification> VisitProgram(Program node) {

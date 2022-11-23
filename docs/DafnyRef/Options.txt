@@ -396,10 +396,6 @@ Usage: Dafny [ option ... ] [ filename ... ]
       
   /generateTestVerbose
       Print various info as comments for debugging
-      
-  /generateTestMinimization:<Random|Topological|Optimal>
-      Use a given test minimization strategy. 
-      Reported statistics might be off if this is used alongside inlining.
   
   ---- Compilation options ---------------------------------------------------
   

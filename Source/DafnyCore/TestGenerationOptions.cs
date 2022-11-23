@@ -11,10 +11,8 @@ namespace Microsoft.Dafny {
     public bool WarnDeadCode = false;
     public enum Modes { None, Block, Path };
     public enum Oracles { None, Spec };
-    public enum Minimizations { Topological, Optimal, Random };
     public Modes Mode = Modes.None;
     public Oracles Oracle = Oracles.None;
-    public Minimizations Minimization = Minimizations.Topological;
     [CanBeNull] public string TargetMethod = null;
     public uint? SeqLengthLimit = null;
     public uint TestInlineDepth = 0;
@@ -52,17 +50,6 @@ namespace Microsoft.Dafny {
               "None" => Modes.None,
               "Block" => Modes.Block,
               "Path" => Modes.Path,
-              _ => throw new Exception("Invalid value for generateTestMode")
-            };
-          }
-          return true;
-
-        case "generateTestMinimization":
-          if (ps.ConfirmArgumentCount(1)) {
-            Minimization = args[ps.i] switch {
-              "Optimal" => Minimizations.Optimal,
-              "Random" => Minimizations.Random,
-              "InOrder" => Minimizations.Topological,
               _ => throw new Exception("Invalid value for generateTestMode")
             };
           }
@@ -191,11 +178,7 @@ namespace Microsoft.Dafny {
       Print JSON object of all target methods and their number of hits
       
   /generateTestVerbose
-      Print various info as comments for debugging
-      
-  /generateTestMinimization:<Random|Topological|Optimal>
-      Use a given test minimization strategy. 
-      Reported statistics might be off if this is used alongside inlining.";
+      Print various info as comments for debugging";
 
   }
 }

@@ -45,7 +45,7 @@ namespace DafnyServer.CounterexampleGeneration {
     private bool isTrueReserved; // True if "true" appears anywhere in the model
     // maps an element representing a primitive to its string representation
     private readonly Dictionary<Model.Element, string> reservedValuesMap = new();
-    // maps width to a unique type object representing bitvector of such width 
+    // maps width to a unique object representing bitvector type of such width 
     private readonly Dictionary<int, BitvectorType> bitvectorTypes = new();
 
     // the model will begin assigning characters starting from this utf value
@@ -899,7 +899,7 @@ namespace DafnyServer.CounterexampleGeneration {
       if (elt == null) {
         return new List<string>();
       }
-      int? dims = fDim.OptEval(elt)?.AsInt();
+      var dims = fDim.OptEval(elt)?.AsInt();
       if (dims is null or 0) { // meaning elt is not an array index
         return elt.Names.Where(tuple =>
           tuple.Func.Arity == 0 && !tuple.Func.Name.Contains("$"))

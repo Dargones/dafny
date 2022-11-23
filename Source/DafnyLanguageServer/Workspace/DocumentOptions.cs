@@ -25,7 +25,6 @@ namespace Microsoft.Dafny.LanguageServer.Workspace {
       // ShowSnippets == true enable boogie assertion's token to contain the range of expressions, not their single token
       ShowSnippetsOption.Instance.Set(DafnyOptions.O, true);
     }
-    
     public List<string> AugmentedProverOptions =>
       DafnyOptions.O.ProverOptions.Concat(new List<string>() {
         "O:model_compress=false", // Replaced by "O:model.compact=false" if z3's version is > 4.8.6

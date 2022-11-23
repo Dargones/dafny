@@ -14,7 +14,7 @@ using Microsoft.Dafny.LanguageServer.Plugins;
 using Newtonsoft.Json.Linq;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
-namespace Microsoft.Dafny.LanguageServer.Handlers;
+namespace Microsoft.Dafny.LanguageServer.Handlers; 
 
 public class DafnyCodeActionHandler : CodeActionHandlerBase {
   private readonly ILogger<DafnyCodeActionHandler> logger;

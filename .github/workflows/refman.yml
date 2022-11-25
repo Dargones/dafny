@@ -2,7 +2,7 @@ name: Build DafnyRef.pdf
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, DTestPR ]
   pull_request:
     branches: [ master ]
 

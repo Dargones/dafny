@@ -39,6 +39,7 @@ namespace DafnyServer.CounterexampleGeneration {
     internal DafnyModelState(DafnyModel model, Model.CapturedState state) {
       Model = model;
       State = state;
+      VarIndex = 0;
       vars = new();
       varMap = new();
       varNameCount = new();
@@ -165,7 +166,7 @@ namespace DafnyServer.CounterexampleGeneration {
         if (n == -1) {
           continue;
         }
-        var name = f.Name[..n];
+        var name = f.Name.Substring(0, n);
         if (!name.Contains('#')) {
           continue;
         }
@@ -177,22 +178,22 @@ namespace DafnyServer.CounterexampleGeneration {
 
     private static string ShortenName(string name, int fnLimit) {
       var loc = TryParseSourceLocation(name);
-      if (loc == null) {
-        return name;
+      if (loc != null) {
+        var fn = loc.Filename;
+        int idx = fn.LastIndexOfAny(new[] { '\\', '/' });
+        if (idx > 0) {
+          fn = fn.Substring(idx + 1);
+        }
+        if (fn.Length > fnLimit) {
+          fn = fn.Substring(0, fnLimit) + "..";
+        }
+        var addInfo = loc.AddInfo;
+        if (addInfo != "") {
+          addInfo = ":" + addInfo;
+        }
+        return $"{fn}({loc.Line},{loc.Column}){addInfo}";
       }
-      var fn = loc.Filename;
-      int idx = fn.LastIndexOfAny(new[] { '\\', '/' });
-      if (idx > 0) {
-        fn = fn[(idx + 1)..];
-      }
-      if (fn.Length > fnLimit) {
-        fn = fn[..fnLimit] + "..";
-      }
-      var addInfo = loc.AddInfo;
-      if (addInfo != "") {
-        addInfo = ":" + addInfo;
-      }
-      return $"{fn}({loc.Line},{loc.Column}){addInfo}";
+      return name;
     }
 
     /// <summary>
@@ -206,8 +207,8 @@ namespace DafnyServer.CounterexampleGeneration {
       if (par <= 0) {
         return null;
       }
-      var res = new SourceLocation { Filename = name[..par] };
-      var words = name[(par + 1)..]
+      var res = new SourceLocation() { Filename = name.Substring(0, par) };
+      var words = name.Substring(par + 1)
         .Split(',', ')', ':')
         .Where(x => x != "")
         .ToArray();
@@ -219,7 +220,7 @@ namespace DafnyServer.CounterexampleGeneration {
         return null;
       }
       int colon = name.IndexOf(':', par);
-      res.AddInfo = colon > 0 ? name[(colon + 1)..].Trim() : "";
+      res.AddInfo = colon > 0 ? name.Substring(colon + 1).Trim() : "";
       return res;
     }
 

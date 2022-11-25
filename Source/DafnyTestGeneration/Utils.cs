@@ -7,7 +7,6 @@ using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Errors = Microsoft.Dafny.Errors;
 using Function = Microsoft.Dafny.Function;
-using LiteralExpr = Microsoft.Dafny.LiteralExpr;
 using Parser = Microsoft.Dafny.Parser;
 using Program = Microsoft.Dafny.Program;
 using Token = Microsoft.Dafny.Token;
@@ -16,12 +15,23 @@ using Type = Microsoft.Dafny.Type;
 namespace DafnyTestGeneration {
 
   public static class Utils {
-
+    
+    /// <summary>
+    /// Take a resolved type and change all names to fully-qualified.
+    /// </summary>
     public static Type UseFullName(Type type) {
-      return DafnyModelTypeUtils.ReplaceType(type, _ => true, type =>
-        new UserDefinedType(new Token(), type?.ResolvedClass?.FullName ?? type.Name, type.TypeArgs));
+      return DafnyModelTypeUtils
+        .ReplaceType(type, _ => true, typ => new UserDefinedType(
+          new Token(),
+          typ?.ResolvedClass?.FullName ?? typ.Name,
+          typ.TypeArgs));
     }
 
+    /// <summary>
+    /// Copy a <param name="type"></param> and recursively replace type
+    /// arguments named as in <param name="from"></param> with types from
+    /// <param name="to"></param>.
+    /// </summary>
     public static Type CopyWithReplacements(Type type, List<string> from, List<Type> to) {
       if (from.Count != to.Count) {
         return type;
@@ -37,9 +47,9 @@ namespace DafnyTestGeneration {
       replacements["_System.object"] =
         new UserDefinedType(new Token(), "object", new List<Type>());
       return DafnyModelTypeUtils.ReplaceType(type, _ => true,
-        type => replacements.ContainsKey(type.Name) ?
-          replacements[type.Name] :
-          new UserDefinedType(type.tok, type.Name, type.TypeArgs));
+        typ => replacements.ContainsKey(typ.Name) ?
+          replacements[typ.Name] :
+          new UserDefinedType(typ.tok, typ.Name, typ.TypeArgs));
     }
 
     /// <summary>
@@ -71,16 +81,8 @@ namespace DafnyTestGeneration {
     /// </summary>
     public static Microsoft.Boogie.Program
       DeepCloneProgram(Microsoft.Boogie.Program program) {
-      var oldPrintInstrumented = DafnyOptions.O.PrintInstrumented;
-      var oldPrintFile = DafnyOptions.O.PrintFile;
-      DafnyOptions.O.PrintInstrumented = true;
-      DafnyOptions.O.PrintFile = "-";
-      var output = new StringWriter();
-      program.Emit(new TokenTextWriter(output, DafnyOptions.O));
-      var textRepresentation = output.ToString();
+      var textRepresentation = GetStringRepresentation(program);
       Microsoft.Boogie.Parser.Parse(textRepresentation, "", out var copy);
-      DafnyOptions.O.PrintInstrumented = oldPrintInstrumented;
-      DafnyOptions.O.PrintFile = oldPrintFile;
       return copy;
     }
 
@@ -96,14 +98,14 @@ namespace DafnyTestGeneration {
       return output.ToString();
     }
 
+    /// <summary>
+    /// Turns each function-method into a function-by-method.
+    /// Copies body of the function into the body of the corresponding method.
+    /// </summary>
     private class AddByMethodRewriter : IRewriter {
 
       protected internal AddByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
-
-      /// <summary>
-      /// Turns each function-method into a function-by-method.
-      /// Copies body of the function into the body of the corresponding method.
-      /// </summary>
+      
       internal void PreResolve(Program program) {
         AddByMethod(program.DefaultModule);
       }
@@ -129,12 +131,6 @@ namespace DafnyTestGeneration {
 
       private static void AddByMethod(Function func) {
         func.Attributes = RemoveAttribute(func.Attributes, "opaque");
-        if (DafnyOptions.O.TestGenOptions.Fuel != null) {
-          func.Attributes = RemoveAttribute(func.Attributes, "fuel");
-          func.Attributes = new Attributes("fuel",
-          new List<Expression>() { new LiteralExpr(new Token(), (int)DafnyOptions.O.TestGenOptions.Fuel) },
-          func.Attributes);
-        }
         if (func.IsGhost || func.Body == null || func.ByMethodBody != null) {
           return;
         }
@@ -143,14 +139,6 @@ namespace DafnyTestGeneration {
         func.ByMethodBody = new BlockStmt(new Token(), new Token(),
           new List<Statement> { returnStatement });
       }
-    }
-
-    public static string Stringify(this object value) {
-      if (value is IEnumerable<object> enumerable) {
-        return string.Join(", ", enumerable.Select(Stringify));
-      }
-
-      return value.ToString()!;
     }
   }
 }

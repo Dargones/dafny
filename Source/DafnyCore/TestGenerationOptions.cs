@@ -16,7 +16,6 @@ namespace Microsoft.Dafny {
     [CanBeNull] public string TargetMethod = null;
     public uint? SeqLengthLimit = null;
     public uint TestInlineDepth = 0;
-    public uint? Fuel = null;
     public bool Verbose = false;
     public bool noPrune = false;
     [CanBeNull] public string PrintBpl = null;
@@ -69,13 +68,6 @@ namespace Microsoft.Dafny {
           var limit = 0;
           if (ps.GetIntArgument(ref limit)) {
             SeqLengthLimit = (uint)limit;
-          }
-          return true;
-
-        case "generateTestFuel":
-          var fuel = 0;
-          if (ps.GetIntArgument(ref fuel)) {
-            Fuel = (uint)fuel;
           }
           return true;
 

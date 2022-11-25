@@ -1,8 +1,6 @@
 using System;
 using JetBrains.Annotations;
 using Bpl = Microsoft.Boogie;
-using System.Collections.Generic;
-using System.IO;
 
 namespace Microsoft.Dafny {
 
@@ -10,9 +8,8 @@ namespace Microsoft.Dafny {
 
     public bool WarnDeadCode = false;
     public enum Modes { None, Block, Path };
-    public enum Oracles { None, Spec };
     public Modes Mode = Modes.None;
-    public Oracles Oracle = Oracles.None;
+    public bool Oracles = false;
     [CanBeNull] public string TargetMethod = null;
     public uint? SeqLengthLimit = null;
     public uint TestInlineDepth = 0;
@@ -32,7 +29,7 @@ namespace Microsoft.Dafny {
           Mode = Modes.Block;
           return true;
 
-        case "noPrune":
+        case "generateTestNoPrune":
           noPrune = true;
           return true;
 
@@ -47,14 +44,8 @@ namespace Microsoft.Dafny {
           }
           return true;
 
-        case "generateTestOracle":
-          if (ps.ConfirmArgumentCount(1)) {
-            Oracle = args[ps.i] switch {
-              "None" => Oracles.None,
-              "Spec" => Oracles.Spec,
-              _ => throw new Exception("Invalid value for generateTestOracle")
-            };
-          }
+        case "generateTestOracles":
+          Oracles = true;
           return true;
 
         case "generateTestSeqLengthLimit":
@@ -98,46 +89,34 @@ namespace Microsoft.Dafny {
     }
 
     public string Help => @"
+/warnDeadCode
+    Use counterexample generation to warn about potential dead code.
 /generateTestMode:<None|Block|Path>
-      None (default) - Has no effect.
-      Block - Prints block-coverage tests for the given program.
-      Path - Prints path-coverage tests for the given program.
-  
-      Using /definiteAssignment:3 and /loopUnroll is highly recommended
-      when generating tests.
-
-  /generateTestOracle:<None|Spec>
-      Determines the kind of oracles generated for the tests.
-      None is the default and has no effect (the test contains no runtime checks).
-      Spec asks the tool to generate runtime checks based on method specification
-
-  /warnDeadCode
-      Use block-coverage tests to warn about potential dead code.
-  
-  /generateTestSeqLengthLimit:<n>
-      If /testMode is not None, using this argument adds an axiom that
-      sets the length of all sequences to be no greater than <n>. This is
-      useful in conjunction with loop unrolling.
-  
-  /generateTestTargetMethod:<methodName>
-      If specified, only this method will be tested.
- 
-  /generateTestInlineDepth:<n>
-      0 is the default. When used in conjunction with /testTargetMethod,
-      this argument specifies the depth up to which all non-tested methods
-      should be inlined.
-      
-  /generateTestPrintBpl:<fileName>
-      Print the Boogie code after all transformations to a specified file
-      
-  /generateTestPrintStats:<fileName>
-      Create a json file with the summary statistics about the generated tests
-      
-  /generateTestPrintTargets<filename>
-      Print JSON object of all target methods and their number of hits
-      
-  /generateTestVerbose
-      Print various info as comments for debugging";
+    None (default) - Has no effect.
+    Block - Prints block-coverage tests for the given program.
+    Path - Prints path-coverage tests for the given program.
+    Using /definiteAssignment:3, /generateTestNoPrune, 
+    /generateTestSeqLengthLimit, and /loopUnroll is highly recommended
+    when generating tests.
+/generateTestSeqLengthLimit:<n>
+    Add an axiom that sets the length of all sequences to be no 
+    greater than <n>. This is useful in conjunction with loop unrolling. 
+/generateTestTargetMethod:<methodName>
+    If specified, only this method will be tested.
+/generateTestInlineDepth:<n>
+    0 is the default. When used in conjunction with /testTargetMethod,
+    this argument specifies the depth up to which all non-tested methods
+    should be inlined.    
+/generateTestOracles
+    Generate runtime checks based on method specification.     
+/generateTestPrintBpl:<fileName>
+    Print the Boogie code used during test generation.      
+/generateTestPrintStats:<fileName>
+    Create a json file with the summary statistics about the generated tests.      
+/generateTestVerbose
+    Print various debugging info as comments for the generated tests.
+/generateTestNoPrune
+    Explicitly disable axiom pruning (recommended)";
 
   }
 }

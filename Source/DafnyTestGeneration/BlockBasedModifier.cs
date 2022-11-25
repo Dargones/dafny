@@ -1,8 +1,6 @@
 #nullable disable
 using System.Collections.Generic;
-using System.Linq;
 using Microsoft.Boogie;
-using Microsoft.Dafny;
 using LiteralExpr = Microsoft.Boogie.LiteralExpr;
 using Program = Microsoft.Boogie.Program;
 using Token = Microsoft.Boogie.Token;

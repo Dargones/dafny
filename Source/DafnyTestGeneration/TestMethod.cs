@@ -734,8 +734,7 @@ namespace DafnyTestGeneration {
         ArgValues.RemoveAt(0);
       }
 
-      if (DafnyOptions.O.TestGenOptions.Oracle ==
-          TestGenerationOptions.Oracles.Spec) {
+      if (DafnyOptions.O.TestGenOptions.Oracles) {
         lines.AddRange(DafnyInfo.GetEnsures(ArgValues,
           returnParNames,
           MethodName,

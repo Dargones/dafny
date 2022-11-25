@@ -1221,8 +1221,8 @@ public class SeqDisplayExpr : DisplayExpression {
 public class SeqSelectExpr : Expression {
   public readonly bool SelectOne;  // false means select a range
   public readonly Expression Seq;
-  public Expression E0; // TODO: double-check that this is necessary
-  public Expression E1;
+  public readonly Expression E0;
+  public readonly Expression E1;
   public readonly IToken CloseParen;
 
   [ContractInvariantMethod]

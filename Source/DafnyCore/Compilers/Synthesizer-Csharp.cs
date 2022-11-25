@@ -102,7 +102,9 @@ public class CsharpSynthesizer {
       o => compiler.idGenerator.FreshId(o.CompileName + "Mock"));
     foreach (var (obj, mockName) in objectToMockName) {
       var typeName = compiler.TypeName(obj.Type, wr, obj.Tok);
-      if ((method.Outs.First().Type as UserDefinedType).IsTraitType) {
+      // Mocking a trait works only so long as no trait member is accessed
+      if ((method.Outs.First().Type is UserDefinedType userDefinedType) && 
+          (userDefinedType.IsTraitType)) {
         wr.FormatLine($"var {mockName} = new Mock<{typeName}>(MockBehavior.Strict);");
       } else {
         wr.FormatLine($"var {mockName} = new Mock<{typeName}>();");
@@ -176,10 +178,9 @@ public class CsharpSynthesizer {
     var methodName = method.CompileName;
 
     if (((Function)method).Ens.Count != 0) {
-      compiler.Error(lastSynthesizedMethod.tok,
-        "Post-conditions on function {0} might " +
-        "be unsatisfied when synthesizing code " +
-        "for method {1}", ErrorWriter,
+      compiler.Error(lastSynthesizedMethod.tok, "Post-conditions on function {0} might " +
+                                 "be unsatisfied when synthesizing code " +
+                                 "for method {1}", ErrorWriter,
         methodName, lastSynthesizedMethod.Name);
     }
 
@@ -220,9 +221,8 @@ public class CsharpSynthesizer {
       var obj = ((IdentifierExpr)exprDotName.Lhs.Resolved).Var;
       var field = ((MemberSelectExpr)exprDotName.Resolved).Member;
       var fieldName = field.CompileName;
-      compiler.Error(lastSynthesizedMethod.tok,
-        "Stubbing fields is not recommended " +
-        "(field {0} of object {1} inside method {2})",
+      compiler.Error(lastSynthesizedMethod.tok, "Stubbing fields is not recommended " +
+                                "(field {0} of object {1} inside method {2})",
         ErrorWriter, fieldName, obj.Name, lastSynthesizedMethod.Name);
       var tmpId = compiler.idGenerator.FreshId("tmp");
       wr.Format($"{objectToMockName[obj]}.SetupGet({tmpId} => {tmpId}.@{fieldName}).Returns( ");

@@ -118,19 +118,29 @@ namespace DafnyTestGeneration {
         }
       }
 
-      private static Attributes RemoveAttribute(Attributes attributes, string toRemove) {
+      private static Attributes RemoveOpaqueAttr(Attributes attributes, Cloner cloner) {
         if (attributes == null) {
           return null;
         }
-        if (attributes.Name == toRemove) {
-          return RemoveAttribute(attributes.Prev, toRemove);
+        if (attributes.Name == "opaque") {
+          RemoveOpaqueAttr(attributes.Prev, cloner);
         }
-        attributes.Prev = RemoveAttribute(attributes.Prev, toRemove);
-        return attributes;
+        if (attributes is UserSuppliedAttributes) {
+          var usa = (UserSuppliedAttributes) attributes;
+          return new UserSuppliedAttributes(
+            cloner.Tok(usa.tok), 
+            cloner.Tok(usa.OpenBrace), 
+            cloner.Tok(usa.CloseBrace), 
+            attributes.Args.ConvertAll(cloner.CloneExpr), 
+            RemoveOpaqueAttr(attributes.Prev, cloner));
+        }
+        return new Attributes(attributes.Name, 
+          attributes.Args.ConvertAll(cloner.CloneExpr), 
+          RemoveOpaqueAttr(attributes.Prev, cloner));
       }
 
       private static void AddByMethod(Function func) {
-        func.Attributes = RemoveAttribute(func.Attributes, "opaque");
+        func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
         if (func.IsGhost || func.Body == null || func.ByMethodBody != null) {
           return;
         }

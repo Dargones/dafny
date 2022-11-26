@@ -205,7 +205,7 @@ namespace DafnyTestGeneration {
         relevantModifications.Any(mod => mod.coversBlocks.Contains(blockId)));
     }
 
-    public static int NumberOfBlocksCovered(Implementation implementation, bool onlyIfTestsExists = false) {
+    public static int NOfBlocksCovered(Implementation implementation, bool onlyIfTestsExists = false) {
       var relevantModifications = ModificationsForImplementation(implementation).Where(modification =>
         !modification.ToBeIgnored && modification.CounterexampleStatus == Status.Success && (!onlyIfTestsExists || (modification.testMethod != null && modification.testMethod.IsValid)));
       var blockIds = implementation.Blocks.Where(block => block.Cmds.Count != 0)
@@ -214,7 +214,7 @@ namespace DafnyTestGeneration {
         relevantModifications.Any(mod => mod.coversBlocks.Contains(blockId)));
     }
 
-    public static int ModificationsWithStatus(Implementation implementation, Status status) =>
+    public static int NWithStatus(Implementation implementation, Status status) =>
       ModificationsForImplementation(implementation)
         .Count(mod => mod.CounterexampleStatus == status);
 

@@ -50,7 +50,7 @@ namespace DafnyTestGeneration {
       Implementation node) {
       implementation = node;
       if (!ImplementationIsToBeTested(node) ||
-          !dafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
+          !DafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
         yield break;
       }
 

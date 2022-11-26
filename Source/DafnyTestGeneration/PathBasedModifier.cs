@@ -40,7 +40,7 @@ namespace DafnyTestGeneration {
     /// </summary>
     private void VisitImplementation(Implementation node) {
       if (!ImplementationIsToBeTested(node) ||
-          !dafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
+          !DafnyInfo.IsAccessible(node.VerboseName.Split(" ")[0])) {
         return;
       }
       var blockToVariable = InitBlockVars(node);

@@ -1,5 +1,4 @@
 ﻿#nullable disable
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -33,34 +32,22 @@ namespace DafnyTestGeneration {
     protected Implementation/*?*/ ImplementationToTarget;
     // Boogie names of implementations to be tested or inlined
     private HashSet<string> toModify = new();
-    protected DafnyInfo dafnyInfo;
+    protected DafnyInfo DafnyInfo;
 
     /// <summary>
     /// Create tests and return the list of bpl test files
     /// </summary>
-    public IEnumerable<ProgramModification> GetModifications(IEnumerable<Program> programs, DafnyInfo dafnyInfo) {
-      this.dafnyInfo = dafnyInfo;
-      if (DafnyOptions.O.TestGenOptions.Verbose) {
-        Console.WriteLine("// Merging boogie files...");
-      }
+    public IEnumerable<ProgramModification> GetModifications(
+      IEnumerable<Program> programs, 
+      DafnyInfo dafnyInfo) 
+    {
+      DafnyInfo = dafnyInfo;
       var program = MergeBoogiePrograms(programs);
-      if (DafnyOptions.O.TestGenOptions.Verbose) {
-        Console.WriteLine("// Converting function calls to method calls...");
-      }
       program = new FunctionToMethodCallRewriter(this).VisitProgram(program);
-      if (DafnyOptions.O.TestGenOptions.Verbose) {
-        Console.WriteLine("// Adding Impl$$ methods to support inlining...");
-      }
       program = new AddImplementationsForCalls().VisitProgram(program);
-      if (DafnyOptions.O.TestGenOptions.Verbose) {
-        Console.WriteLine("// Removing assertions...");
-      }
       program = new RemoveChecks().VisitProgram(program);
-      if (DafnyOptions.O.TestGenOptions.Verbose) {
-        Console.WriteLine("// Annotating blocks...");
-      }
       var engine = ExecutionEngine.CreateWithoutSharedCache(DafnyOptions.O);
-      engine.CoalesceBlocks(program);
+      engine.CoalesceBlocks(program); // removes redundant basic blocks
       if (DafnyOptions.O.TestGenOptions.TargetMethod != null) {
         ImplementationToTarget = program.Implementations.FirstOrDefault(i =>
           i.Name.StartsWith("Impl$$")
@@ -71,16 +58,15 @@ namespace DafnyTestGeneration {
       }
       var callGraphVisitor = new CallGraphVisitor();
       callGraphVisitor.VisitProgram(program);
-      toModify = callGraphVisitor.GetCallees(ImplementationToTarget?.Name, DafnyOptions.O.TestGenOptions.TestInlineDepth);
+      toModify = callGraphVisitor.GetCallees(
+        ImplementationToTarget?.Name, 
+        DafnyOptions.O.TestGenOptions.TestInlineDepth);
       var annotator = new AnnotationVisitor(this);
       program = annotator.VisitProgram(program);
       AddAxioms(program);
       if (DafnyOptions.O.TestGenOptions.PrintBpl != null) {
         File.WriteAllText(DafnyOptions.O.TestGenOptions.PrintBpl,
           Utils.GetStringRepresentation(program));
-      }
-      if (DafnyOptions.O.TestGenOptions.Verbose) {
-        Console.WriteLine("// Generating modifications...");
       }
       return GetModifications(program);
     }
@@ -90,25 +76,25 @@ namespace DafnyTestGeneration {
     protected bool ImplementationIsToBeTested(Implementation impl) =>
       (ImplementationToTarget == null || toModify.Contains(impl.Name)) &&
       impl.Name.StartsWith("Impl$$") && !impl.Name.EndsWith("__ctor") &&
-      !dafnyInfo.IsGhost(impl.VerboseName.Split(" ").First());
+      !DafnyInfo.IsGhost(impl.VerboseName.Split(" ").First());
 
     /// <summary>
     /// Add axioms necessary for counterexample generation to work efficiently
     /// </summary>
     private static void AddAxioms(Program program) {
-      Axiom axiom;
-      if (DafnyOptions.O.TestGenOptions.SeqLengthLimit != null) {
-        var limit = (uint)DafnyOptions.O.TestGenOptions.SeqLengthLimit;
-        axiom = GetAxiom($"axiom (forall<T> y: Seq T :: " +
-                         $"{{ Seq#Length(y) }} Seq#Length(y) <= {limit});");
-        program.AddTopLevelDeclaration(axiom);
-        // TODO: Define the axiom as a resolved AST
+      if (DafnyOptions.O.TestGenOptions.SeqLengthLimit == null) {
+        return;
       }
+      var limit = (uint)DafnyOptions.O.TestGenOptions.SeqLengthLimit;
+      Parser.Parse($"axiom (forall<T> y: Seq T :: " +
+                   $"{{ Seq#Length(y) }} Seq#Length(y) <= {limit});", 
+        "", out var tmpProgram);
+      program.AddTopLevelDeclaration(
+        (Axiom)tmpProgram.TopLevelDeclarations.ToList()[0]);
     }
 
     /// <summary>
     /// Merge Boogie Programs by removing any duplicate top level declarations
-    /// (these typically come from DafnyPrelude.bpl)
     /// </summary>
     private static Program MergeBoogiePrograms(IEnumerable<Program> programs) {
       // Merge all programs into one first:
@@ -118,36 +104,35 @@ namespace DafnyTestGeneration {
       }
       // Remove duplicates afterwards:
       var declarations = new Dictionary<string, HashSet<string/*?*/>>();
-      var axioms = new HashSet<string>();
       var toRemove = new List<Declaration>();
       foreach (var declaration in program.TopLevelDeclarations) {
         var typeName = declaration.GetType().Name;
-        if (typeName.Equals("Axiom")) {
-          var axiomAsString = declaration.ToString();
-          if (axiomAsString != null && axioms.Contains(axiomAsString)) {
-            toRemove.Add(declaration);
-            continue;
-          }
-          axioms.Add(declaration.ToString());
-          continue;
-        }
         if (!declarations.ContainsKey(typeName)) {
           declarations[typeName] = new();
         }
-        if (declarations[typeName].Contains(declaration.ToString())) {
+        var declarationAsString = declaration.ToString();
+        if (declarationAsString != null && 
+            declarations[typeName].Contains(declarationAsString)) {
           toRemove.Add(declaration);
         } else {
-          declarations[typeName].Add(declaration.ToString());
+          declarations[typeName].Add(declarationAsString);
         }
       }
       toRemove.ForEach(x => program.RemoveTopLevelDeclaration(x));
       return Utils.DeepCloneProgramAndReresolve(program, DafnyOptions.O);
     }
 
-    private static AssumeCmd GetAssumePrintCmd(List<object> data) {
+    /// <summary>
+    /// Create an assume command that prints objects in the
+    /// <param name="data">list</param> as part of error trace.
+    /// </summary>
+    private static AssumeCmd GetAssumePrintCmd(
+      List<object> data, 
+      string separator=" | ") 
+    {
       // first insert separators between the things being printed
       var toPrint = new List<object>();
-      data.Iter(obj => toPrint.AddRange(new List<object> { obj, " | " }));
+      data.Iter(obj => toPrint.AddRange(new List<object> { obj, separator }));
       if (toPrint.Count() != 0) {
         toPrint.RemoveAt(toPrint.Count() - 1);
       }
@@ -157,15 +142,14 @@ namespace DafnyTestGeneration {
         new LiteralExpr(new Token(), true), annotation);
     }
 
-    private static Axiom GetAxiom(string source) {
-      Parser.Parse(source, "", out var program);
-      return (Axiom)program.TopLevelDeclarations.ToList()[0];
-    }
-
     /// <summary>
-    /// Add a new local variable to the implementation currently processed
+    /// Create a new local variable with a name that has not been reserved
     /// </summary>
-    protected static LocalVariable GetNewLocalVariable(Implementation impl, Type type, string baseName = "tmp#") {
+    protected static LocalVariable GetNewLocalVariable(
+      Implementation impl, 
+      Type type, 
+      string baseName = "tmp#") 
+    {
       int id = 0;
       while (impl.LocVars.Exists(v => v.Name == baseName + id)) {
         id++;

@@ -504,7 +504,6 @@ namespace DafnyTestGeneration {
       }
 
       public override Type CloneType(Type type) {
-        // TODO: type arguments
         if (type is UserDefinedType userDefinedType) {
           var name = userDefinedType?.ResolvedClass?.FullName ??
                      userDefinedType.Name;

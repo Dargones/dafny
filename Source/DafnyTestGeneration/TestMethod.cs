@@ -330,14 +330,12 @@ namespace DafnyTestGeneration {
         case UserDefinedType tupleType when tupleType.Name.StartsWith("_System.Tuple") || tupleType.Name.StartsWith("_System._tuple"):
           errorMessages.Add("// Failed - temporary disable datatype support");
           var tupleName = "d" + nextValueId++;
-          // TODO: specify type
           ValueCreation.Add((tupleName, DafnyModel.UnknownType, "(" +
             string.Join(",", variable.Children.Values
             .Select(v => ExtractVariable(v.First(), null))) + ")"));
           return tupleName;
         case DafnyModelTypeUtils.DatatypeType dataType:
           if (variable.CanonicalName() == "") {
-            // TODO: Can fields be non-empty in this case?
             getDefaultValueParams = new();
             return GetDefaultValue(dataType, asType);
           }

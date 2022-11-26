@@ -85,6 +85,17 @@ namespace DafnyTestGeneration {
       Microsoft.Boogie.Parser.Parse(textRepresentation, "", out var copy);
       return copy;
     }
+    
+    /// <summary>
+    /// Deep clone a Boogie program.
+    /// </summary>
+    public static Microsoft.Boogie.Program
+      DeepCloneProgramAndReresolve(Microsoft.Boogie.Program program, DafnyOptions options) {
+      program = DeepCloneProgram(program);
+      program.Resolve(options);
+      program.Typecheck(options);
+      return program;
+    }
 
     public static string GetStringRepresentation(Microsoft.Boogie.Program program) {
       var oldPrintInstrumented = DafnyOptions.O.PrintInstrumented;

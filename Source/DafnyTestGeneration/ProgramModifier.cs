@@ -141,11 +141,7 @@ namespace DafnyTestGeneration {
         }
       }
       toRemove.ForEach(x => program.RemoveTopLevelDeclaration(x));
-      program.Resolve(DafnyOptions.O);
-      program = Utils.DeepCloneProgram(program);
-      program.Resolve(DafnyOptions.O);
-      program.Typecheck(DafnyOptions.O);
-      return program;
+      return Utils.DeepCloneProgramAndReresolve(program, DafnyOptions.O);
     }
 
     private static AssumeCmd GetAssumePrintCmd(List<object> data) {
@@ -247,10 +243,7 @@ namespace DafnyTestGeneration {
         implsToAdd = new();
         node = base.VisitProgram(node);
         node.AddTopLevelDeclarations(implsToAdd);
-        node = Utils.DeepCloneProgram(node);
-        node.Resolve(DafnyOptions.O);
-        node.Typecheck(DafnyOptions.O);
-        return node;
+        return Utils.DeepCloneProgramAndReresolve(node, DafnyOptions.O);
       }
     }
 
@@ -494,10 +487,7 @@ namespace DafnyTestGeneration {
           .OfType<Implementation>()
           .Where(i => modifier.ImplementationIsToBeTested(i))
           .Iter(i => VisitImplementation(i));
-        node = Utils.DeepCloneProgram(node);
-        node.Resolve(DafnyOptions.O);
-        node.Typecheck(DafnyOptions.O);
-        return node;
+        return Utils.DeepCloneProgramAndReresolve(node, DafnyOptions.O);
       }
 
       public FunctionToMethodCallRewriter(ProgramModifier modifier) {
@@ -667,6 +657,10 @@ namespace DafnyTestGeneration {
 
     }
 
+    /// <summary>
+    /// Replace assertions with assumptions and ensures with free ensures to
+    /// alleviate the verification burden. Return a reresolved copy of the AST.
+    /// </summary>
     private class RemoveChecks : StandardVisitor {
 
       public override Block VisitBlock(Block node) {
@@ -682,18 +676,20 @@ namespace DafnyTestGeneration {
       public override Procedure VisitProcedure(Procedure node) {
         List<Ensures> newEnsures = new();
         foreach (var e in node.Ensures) {
-          newEnsures.Add(new Ensures(new Token(), true, e.Condition, e.Comment, e.Attributes));
+          newEnsures.Add(new Ensures(
+            new Token(), 
+            true, 
+            e.Condition, 
+            e.Comment, 
+            e.Attributes));
         }
         node.Ensures = newEnsures;
         return node;
       }
 
       public override Program VisitProgram(Program node) {
-        VisitDeclarationList(node.TopLevelDeclarations.ToList<Declaration>());
-        node = Utils.DeepCloneProgram(node);
-        node.Resolve(DafnyOptions.O);
-        node.Typecheck(DafnyOptions.O);
-        return node;
+        VisitDeclarationList(node.TopLevelDeclarations.ToList());
+        return Utils.DeepCloneProgramAndReresolve(node, DafnyOptions.O);
       }
     }
   }

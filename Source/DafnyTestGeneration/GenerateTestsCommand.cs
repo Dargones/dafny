@@ -16,17 +16,17 @@ public class GenerateTestsCommand : ICommandSpec {
       VerificationTimeLimitOption.Instance,
     }.Concat(ICommandSpec.CommonOptions);
 
-  enum Mode {
+  private enum Mode {
     Path,
     Block
   }
 
-  readonly Argument<Mode> modeArgument = new("mode", @"
+  private readonly Argument<Mode> modeArgument = new("mode", @"
 block - Prints block-coverage tests for the given program.
 path - Prints path-coverage tests for the given program.");
 
   public Command Create() {
-    var result = new Command("generate-tests", "(Experimental) Generate Dafny tests that ensure block or path coverage of a particular Dafny program .");
+    var result = new Command("generate-tests", "(Experimental) Generate Dafny tests that ensure block or path coverage of a particular Dafny program.");
     result.AddArgument(modeArgument);
     result.AddArgument(ICommandSpec.FilesArgument);
     return result;
@@ -49,7 +49,7 @@ path - Prints path-coverage tests for the given program.");
   }
 }
 
-class TargetMethod : StringOption {
+internal class TargetMethod : StringOption {
   public static readonly TargetMethod Instance = new();
   public override object DefaultValue => null!;
   public override string LongName => "target-method";
@@ -61,7 +61,7 @@ class TargetMethod : StringOption {
   }
 }
 
-class TestInlineDepth : NaturalNumberOption {
+internal class TestInlineDepth : NaturalNumberOption {
   public static readonly TestInlineDepth Instance = new();
   public override object DefaultValue => 0u;
   public override string LongName => "inline-depth";
@@ -74,7 +74,7 @@ class TestInlineDepth : NaturalNumberOption {
   }
 }
 
-class SequenceLengthLimitOption : IntegerOption {
+internal class SequenceLengthLimitOption : IntegerOption {
   public static readonly SequenceLengthLimitOption Instance = new();
   public override object DefaultValue => -1;
   public override string LongName => "length-limit";
@@ -88,7 +88,7 @@ class SequenceLengthLimitOption : IntegerOption {
   }
 }
 
-class LoopUnrollOption : IntegerOption {
+internal class LoopUnrollOption : IntegerOption {
   public static readonly LoopUnrollOption Instance = new();
   public override object DefaultValue => 0;
   public override string LongName => "loop-unroll";

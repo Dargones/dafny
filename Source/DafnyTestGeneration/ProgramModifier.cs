@@ -56,11 +56,14 @@ namespace DafnyTestGeneration {
       } else {
         ImplementationToTarget = null;
       }
-      var callGraphVisitor = new CallGraphVisitor();
+      var callGraphVisitor = new CallGraph();
       callGraphVisitor.VisitProgram(program);
+      // DafnyOptions.O.TestGenOptions.TestInlineDepth is multiplied by two
+      // because inlining a method call in Dafny is equivalent to inlining
+      // two procedures in Boogie (Call$$- and Impl$$-prefixed procedures)
       toModify = callGraphVisitor.GetCallees(
         ImplementationToTarget?.Name, 
-        DafnyOptions.O.TestGenOptions.TestInlineDepth);
+        DafnyOptions.O.TestGenOptions.TestInlineDepth * 2);
       var annotator = new AnnotationVisitor(this);
       program = annotator.VisitProgram(program);
       AddAxioms(program);
@@ -232,27 +235,31 @@ namespace DafnyTestGeneration {
     }
 
     /// <summary>
-    /// Construct the call graph to the indicate the set of all methods that
-    /// might have to be inlined into the procedure of interest
+    /// A call graph object to determine which procedures to inline
     /// </summary>
-    private class CallGraphVisitor : ReadOnlyVisitor {
+    private class CallGraph : ReadOnlyVisitor {
 
       // maps name of an implementation to those implementations that it calls
       private readonly Dictionary<string, List<string>> calls = new();
-      private string/*?*/ impl;
+      private string/*?*/ implementation; // implementation currently traversed
 
       public override Implementation VisitImplementation(Implementation node) {
-        impl = node.Name;
-        calls[impl] = new List<string>();
+        implementation = node.Name;
+        calls[implementation] = new List<string>();
         node.Blocks.ForEach(block => VisitBlock(block));
         return node;
       }
 
       public override Cmd VisitCallCmd(CallCmd node) {
-        if (impl != null) {
-          calls[impl].Add(node.callee);
+        if (implementation != null) {
+          calls[implementation].Add(node.callee);
         }
         return base.VisitCallCmd(node);
+      }
+      
+      public override Program VisitProgram(Program node) {
+        node = base.VisitProgram(node);
+        return node;
       }
 
       /// <summary>
@@ -280,15 +287,10 @@ namespace DafnyTestGeneration {
           }
         }
       }
-
-      public override Program VisitProgram(Program node) {
-        node = base.VisitProgram(node);
-        return node;
-      }
     }
 
     /// <summary>
-    /// Annotate the AST with assume true statements inserted at:
+    /// Annotate the AST with "assume true" print statements inserted at:
     /// (1)     the beginning of each implementation, to get the parameter types
     ///         and values leading to assertion or post-condition violation.
     /// (2)     the end of each block, to get execution trace.
@@ -333,9 +335,9 @@ namespace DafnyTestGeneration {
           node.Blocks[0].cmds.Insert(0, GetAssumePrintCmd(data));
         } else if ((DafnyOptions.O.TestGenOptions.TestInlineDepth > 0) &&
                    modifier.toModify.Contains(node.Name)) {
-          // This method is inlined
+          // This method is inlined (and hence tested)
           var depthExpression =
-            new LiteralExpr(new Token(), BigNum.FromInt(1));
+            new LiteralExpr(new Token(), BigNum.FromUInt(DafnyOptions.O.TestGenOptions.TestInlineDepth));
           var attribute = new QKeyValue(new Token(), "inline",
             new List<object>() { depthExpression }, null);
           attribute.Next = node.Attributes;
@@ -352,7 +354,9 @@ namespace DafnyTestGeneration {
     }
 
     /// <summary>
-    /// Replaces all function calls with method calls, whenever possible
+    /// Replaces a function call with a procedure call, whenever there are two
+    /// equivalent representations of the same functionality as a result of
+    /// translating a Dafny function-by-method to Boogie
     /// </summary>
     private class FunctionToMethodCallRewriter : StandardVisitor {
 

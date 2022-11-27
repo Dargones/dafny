@@ -11,7 +11,7 @@ namespace Microsoft.Dafny {
     public Modes Mode = Modes.None;
     public bool Oracles = false;
     [CanBeNull] public string TargetMethod = null;
-    public uint? SeqLengthLimit = null;
+    public int SeqLengthLimit = -1;
     public uint TestInlineDepth = 0;
     public bool Verbose = false;
     public bool noPrune = false;
@@ -51,7 +51,7 @@ namespace Microsoft.Dafny {
         case "generateTestSeqLengthLimit":
           var limit = 0;
           if (ps.GetIntArgument(ref limit)) {
-            SeqLengthLimit = (uint)limit;
+            SeqLengthLimit = limit;
           }
           return true;
 
@@ -99,8 +99,8 @@ namespace Microsoft.Dafny {
     /generateTestSeqLengthLimit, and /loopUnroll is highly recommended
     when generating tests.
 /generateTestSeqLengthLimit:<n>
-    Add an axiom that sets the length of all sequences to be no 
-    greater than <n>. This is useful in conjunction with loop unrolling. 
+    Add an axiom that sets the length of all sequences to be no greater 
+    than <n>. Negative value indicates no limit.
 /generateTestTargetMethod:<methodName>
     If specified, only this method will be tested.
 /generateTestInlineDepth:<n>

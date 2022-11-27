@@ -79,11 +79,10 @@ internal class SequenceLengthLimitOption : IntegerOption {
   public override object DefaultValue => -1;
   public override string LongName => "length-limit";
   public override string ArgumentName => "n";
-  public override string Description => "Add an axiom that sets the length of all sequences to be no greater than <n>. -1 indicates no limit.";
+  public override string Description => "Add an axiom that sets the length of all sequences to be no greater than <n>. Negative value indicates no limit.";
 
   public override string PostProcess(DafnyOptions options) {
-    var limit = Get(options);
-    options.TestGenOptions.SeqLengthLimit = limit == -1 ? null : (uint)Math.Abs(limit);
+    options.TestGenOptions.SeqLengthLimit = Get(options);
     return null!;
   }
 }

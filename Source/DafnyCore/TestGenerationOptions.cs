@@ -9,12 +9,10 @@ namespace Microsoft.Dafny {
     public bool WarnDeadCode = false;
     public enum Modes { None, Block, Path };
     public Modes Mode = Modes.None;
-    public bool Oracles = false;
     [CanBeNull] public string TargetMethod = null;
     public int SeqLengthLimit = -1;
     public uint TestInlineDepth = 0;
     public bool Verbose = false;
-    public bool noPrune = false;
     [CanBeNull] public string PrintBpl = null;
     [CanBeNull] public string PrintStats = null;
 
@@ -29,10 +27,6 @@ namespace Microsoft.Dafny {
           Mode = Modes.Block;
           return true;
 
-        case "generateTestNoPrune":
-          noPrune = true;
-          return true;
-
         case "generateTestMode":
           if (ps.ConfirmArgumentCount(1)) {
             Mode = args[ps.i] switch {
@@ -42,10 +36,6 @@ namespace Microsoft.Dafny {
               _ => throw new Exception("Invalid value for generateTestMode")
             };
           }
-          return true;
-
-        case "generateTestOracles":
-          Oracles = true;
           return true;
 
         case "generateTestSeqLengthLimit":
@@ -106,17 +96,13 @@ namespace Microsoft.Dafny {
 /generateTestInlineDepth:<n>
     0 is the default. When used in conjunction with /testTargetMethod,
     this argument specifies the depth up to which all non-tested methods
-    should be inlined.    
-/generateTestOracles
-    Generate runtime checks based on method specification.     
+    should be inlined.
 /generateTestPrintBpl:<fileName>
-    Print the Boogie code used during test generation.      
+    Print the Boogie code used during test generation.
 /generateTestPrintStats:<fileName>
-    Create a json file with the summary statistics about the generated tests.      
+    Create a json file with the summary statistics about the generated tests.
 /generateTestVerbose
-    Print various debugging info as comments for the generated tests.
-/generateTestNoPrune
-    Explicitly disable axiom pruning (recommended)";
+    Print various debugging info as comments for the generated tests.";
 
   }
 }

@@ -20,10 +20,6 @@ namespace DafnyTestGeneration {
       return VisitProgram(p);
     }
     private ProgramModification/*?*/ VisitBlock(Block node) {
-      var captured = ExtractCapturedStates(node);
-      if (captured.Count > 0) {
-        return null;
-      }
 
       if (program == null || implementation == null) {
         return null;

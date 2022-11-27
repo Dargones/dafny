@@ -732,12 +732,11 @@ namespace DafnyTestGeneration {
         ArgValues.RemoveAt(0);
       }
 
-      if (DafnyOptions.O.TestGenOptions.Oracles) {
-        lines.AddRange(DafnyInfo.GetEnsures(ArgValues,
-          returnParNames,
-          MethodName,
-          receiver).Select(e => "expect " + Printer.ExprToString(e) + ";"));
-      }
+      
+      lines.AddRange(DafnyInfo.GetEnsures(ArgValues,
+        returnParNames,
+        MethodName,
+        receiver).Select(e => "expect " + Printer.ExprToString(e) + ";"));
 
       if (!DafnyInfo.IsStatic(MethodName)) {
         ArgValues.Insert(0, receiver);

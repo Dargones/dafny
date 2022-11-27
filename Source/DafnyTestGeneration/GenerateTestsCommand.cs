@@ -14,6 +14,9 @@ public class GenerateTestsCommand : ICommandSpec {
       TargetMethod.Instance,
       TestInlineDepth.Instance,
       VerificationTimeLimitOption.Instance,
+      VerboseOption.Instance,
+      PrintBpl.Instance, 
+      PrintStats.Instance
     }.Concat(ICommandSpec.CommonOptions);
 
   private enum Mode {
@@ -95,6 +98,42 @@ internal class LoopUnrollOption : IntegerOption {
   public override string Description => "Higher values can improve accuracy of the analysis at the cost of taking longer to run.";
   public override string PostProcess(DafnyOptions options) {
     options.LoopUnrollCount = Get(options);
+    return null!;
+  }
+}
+
+internal class VerboseOption : BooleanOption {
+  
+  public static readonly VerboseOption Instance = new();
+  public override object DefaultValue => false;
+  public override string LongName => "verbose";
+  public override string Description => "Print various debugging info as comments for the generated tests.";
+  public override string PostProcess(DafnyOptions options) {
+    options.TestGenOptions.Verbose = Get(options);
+    return null!;
+  }
+}
+
+internal class PrintBpl : StringOption {
+  public static readonly PrintBpl Instance = new();
+  public override object DefaultValue => null!;
+  public override string LongName => "print-bpl";
+  public override string ArgumentName => "filename";
+  public override string Description => "Print the Boogie code used during test generation.";
+  public override string PostProcess(DafnyOptions options) {
+    options.TestGenOptions.PrintBpl = Get(options);
+    return null!;
+  }
+}
+
+internal class PrintStats : StringOption {
+  public static readonly PrintStats Instance = new();
+  public override object DefaultValue => null!;
+  public override string LongName => "print-stats";
+  public override string ArgumentName => "filename";
+  public override string Description => "Create a json file with the summary statistics about the generated tests.";
+  public override string PostProcess(DafnyOptions options) {
+    options.TestGenOptions.PrintStats = Get(options);
     return null!;
   }
 }

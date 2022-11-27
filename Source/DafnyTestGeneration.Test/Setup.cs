@@ -14,8 +14,6 @@ namespace DafnyTestGeneration.Test {
       options.TestGenOptions.Mode = TestGenerationOptions.Modes.Block;
       options.TestGenOptions.WarnDeadCode = false;
       options.TestGenOptions.TestInlineDepth = 0;
-      options.TestGenOptions.noPrune = true;
-      options.TestGenOptions.Oracles = false;
       options.TimeLimit = 10;
       DafnyOptions.Install(options);
     }

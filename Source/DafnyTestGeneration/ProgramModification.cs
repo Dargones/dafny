@@ -82,7 +82,7 @@ namespace DafnyTestGeneration {
         "O:model.completion=true"
       };
       options.TimeLimit = DafnyOptions.O.TimeLimit;
-      options.Prune = !DafnyOptions.O.TestGenOptions.noPrune;
+      options.Prune = false;
       options.ProverOptions.AddRange(DafnyOptions.O.ProverOptions);
       options.LoopUnrollCount = DafnyOptions.O.LoopUnrollCount;
       options.DefiniteAssignmentLevel = DafnyOptions.O.DefiniteAssignmentLevel;

@@ -378,9 +378,6 @@ Usage: Dafny [ option ... ] [ filename ... ]
       0 is the default. When used in conjunction with /testTargetMethod,
       this argument specifies the depth up to which all non-tested methods
       should be inlined.    
-      
-  /generateTestOracles
-      Generate runtime checks based on method specification.
         
   /generateTestPrintBpl:<fileName>
       Print the Boogie code used during test generation.
@@ -390,9 +387,6 @@ Usage: Dafny [ option ... ] [ filename ... ]
          
   /generateTestVerbose
       Print various debugging info as comments for the generated tests.
-      
-  /generateTestNoPrune
-      Explicitly disable axiom pruning (recommended)
       
   ---- Compilation options ---------------------------------------------------
   

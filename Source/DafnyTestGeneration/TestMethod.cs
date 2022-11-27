@@ -186,7 +186,7 @@ namespace DafnyTestGeneration {
       getDefaultValueParams = new();
       var lambda =
         $"({string.Join(",", type.TypeArgs.SkipLast(1).Select((t, i) => "a" + i + ":" + t))})" + // parameter types
-        $"=>" + // return type
+        "=>" + // return type
         $"{GetDefaultValue(type.TypeArgs.Last())}"; // body
       return lambda;
     }
@@ -282,11 +282,10 @@ namespace DafnyTestGeneration {
           // Work around stack overflow issue that can occur in Dafny when trying to construct large strings.
           // Only apply this for strings i.e. sequences of characters.
           //
-          int largeStringSize = 200;
-          if (seqType.Arg is CharType && elements.Count > largeStringSize) {
+          const int chunksize = 100;
+          if (seqType.Arg is CharType && elements.Count > chunksize) {
             int i = 0;
-            int chunksize = 100;
-            List<string> chunkStrs = new List<string>();
+            var chunkStrs = new List<string>();
             while (i < elements.Count) {
               int count = Math.Min(chunksize, elements.Count - i);
               string chunk = "\"" + string.Join("", elements.GetRange(i, count)).Replace("'", "") + "\"";

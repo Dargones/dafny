@@ -16,7 +16,8 @@ public class GenerateTestsCommand : ICommandSpec {
       VerificationTimeLimitOption.Instance,
       VerboseOption.Instance,
       PrintBpl.Instance, 
-      PrintStats.Instance
+      PrintStats.Instance,
+      TimeLimit.Instance
     }.Concat(ICommandSpec.CommonOptions);
 
   private enum Mode {
@@ -134,6 +135,19 @@ internal class PrintStats : StringOption {
   public override string Description => "Create a json file with the summary statistics about the generated tests.";
   public override string PostProcess(DafnyOptions options) {
     options.TestGenOptions.PrintStats = Get(options);
+    return null!;
+  }
+}
+
+internal class TimeLimit : NaturalNumberOption {
+  public static readonly TimeLimit Instance = new();
+  public override object DefaultValue => TestGenerationOptions.DefaultTimeLimit;
+  public override string LongName => "time-limit";
+  public override string ArgumentName => "n";
+  public override string Description =>
+    $"{TestGenerationOptions.DefaultTimeLimit} is the default. Maximum number of seconds allowed to generate a test.";
+  public override string PostProcess(DafnyOptions options) {
+    options.TimeLimit = Get(options);
     return null!;
   }
 }

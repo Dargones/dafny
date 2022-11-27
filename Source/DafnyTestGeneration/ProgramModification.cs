@@ -114,9 +114,10 @@ namespace DafnyTestGeneration {
       engine.Inline(program);
       var writer = new StringWriter();
       var result = await Task.WhenAny(engine.InferAndVerify(writer, program,
-          new PipelineStatistics(), null,
-          _ => { }, guid),
-        Task.Delay(TimeSpan.FromSeconds(oldOptions.TimeLimit)));
+            new PipelineStatistics(), null,
+            _ => { }, guid),
+          Task.Delay(TimeSpan.FromSeconds(oldOptions.TimeLimit <= 0 ? 
+            TestGenerationOptions.DefaultTimeLimit : oldOptions.TimeLimit)));
       program = null; // allows to garbage collect what is no longer needed
       CounterexampleStatus = Status.Failure;
       counterexampleLog = null;
@@ -125,7 +126,7 @@ namespace DafnyTestGeneration {
         if (DafnyOptions.O.TestGenOptions.Verbose) {
           Console.WriteLine(
             $"// No test can be generated for {UniqueId} " +
-            $"because the verifier timed out.");
+            "because the verifier timed out.");
         }
         return counterexampleLog;
       }
@@ -147,19 +148,19 @@ namespace DafnyTestGeneration {
         if (log == "") {
           Console.WriteLine(
             $"// No test can be generated for {UniqueId} " +
-            $"because the verifier suceeded.");
+            "because the verifier suceeded.");
         } else if (log.Contains("MODEL")) {
           Console.WriteLine(
             $"// No test can be generated for {UniqueId} " +
-            $"because there is no enhanced error trace.");
+            "because there is no enhanced error trace.");
         } else if (log.Contains("anon0")) {
           Console.WriteLine(
             $"// No test can be generated for {UniqueId} " +
-            $"because the model cannot be extracted.");
+            "because the model cannot be extracted.");
         } else {
           Console.WriteLine(
             $"// No test can be generated for {UniqueId} " +
-            $"because the verifier timed out.");
+            "because the verifier timed out.");
         }
       }
       return counterexampleLog;

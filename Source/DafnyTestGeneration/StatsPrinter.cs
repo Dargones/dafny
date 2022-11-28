@@ -17,14 +17,14 @@ namespace DafnyTestGeneration {
 
     public void WriteToFile(string filePath) {
       var json = JsonConvert.SerializeObject(
-        accumulatedStats, 
+        accumulatedStats,
         Formatting.Indented);
       File.WriteAllText(filePath, json);
     }
 
-    public void PopulateInformation(DafnyInfo dafnyInfo, 
-      HashSet<Implementation> implementations, 
-      Dictionary<Implementation, int> testCount, 
+    public void PopulateInformation(DafnyInfo dafnyInfo,
+      HashSet<Implementation> implementations,
+      Dictionary<Implementation, int> testCount,
       Dictionary<Implementation, int> failedTestCount) {
       foreach (var implementation in implementations) {
         Dictionary<string, string> record = new();
@@ -33,7 +33,7 @@ namespace DafnyTestGeneration {
         record["blocksCovered"] =
           ProgramModification.NOfBlocksCovered(implementation).ToString();
         record["blocksCoveredByTests"] =
-          ProgramModification.NOfBlocksCovered(implementation,true).ToString();
+          ProgramModification.NOfBlocksCovered(implementation, true).ToString();
         record["failedQueries"] =
           ProgramModification.NWithStatus(implementation,
             ProgramModification.Status.Failure).ToString();

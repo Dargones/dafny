@@ -15,7 +15,7 @@ using Type = Microsoft.Dafny.Type;
 namespace DafnyTestGeneration {
 
   public static class Utils {
-    
+
     /// <summary>
     /// Take a resolved type and change all names to fully-qualified.
     /// </summary>
@@ -85,7 +85,7 @@ namespace DafnyTestGeneration {
       Microsoft.Boogie.Parser.Parse(textRepresentation, "", out var copy);
       return copy;
     }
-    
+
     /// <summary>
     /// Deep clone a Boogie program.
     /// </summary>
@@ -116,7 +116,7 @@ namespace DafnyTestGeneration {
     private class AddByMethodRewriter : IRewriter {
 
       protected internal AddByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
-      
+
       internal void PreResolve(Program program) {
         AddByMethod(program.DefaultModule);
       }
@@ -137,16 +137,16 @@ namespace DafnyTestGeneration {
           RemoveOpaqueAttr(attributes.Prev, cloner);
         }
         if (attributes is UserSuppliedAttributes) {
-          var usa = (UserSuppliedAttributes) attributes;
+          var usa = (UserSuppliedAttributes)attributes;
           return new UserSuppliedAttributes(
-            cloner.Tok(usa.tok), 
-            cloner.Tok(usa.OpenBrace), 
-            cloner.Tok(usa.CloseBrace), 
-            attributes.Args.ConvertAll(cloner.CloneExpr), 
+            cloner.Tok(usa.tok),
+            cloner.Tok(usa.OpenBrace),
+            cloner.Tok(usa.CloseBrace),
+            attributes.Args.ConvertAll(cloner.CloneExpr),
             RemoveOpaqueAttr(attributes.Prev, cloner));
         }
-        return new Attributes(attributes.Name, 
-          attributes.Args.ConvertAll(cloner.CloneExpr), 
+        return new Attributes(attributes.Name,
+          attributes.Args.ConvertAll(cloner.CloneExpr),
           RemoveOpaqueAttr(attributes.Prev, cloner));
       }
 

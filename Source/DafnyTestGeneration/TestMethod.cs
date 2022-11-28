@@ -731,7 +731,7 @@ namespace DafnyTestGeneration {
         ArgValues.RemoveAt(0);
       }
 
-      
+
       lines.AddRange(DafnyInfo.GetEnsures(ArgValues,
         returnParNames,
         MethodName,

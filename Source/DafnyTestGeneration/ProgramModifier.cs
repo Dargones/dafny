@@ -38,9 +38,8 @@ namespace DafnyTestGeneration {
     /// Create tests and return the list of bpl test files
     /// </summary>
     public IEnumerable<ProgramModification> GetModifications(
-      IEnumerable<Program> programs, 
-      DafnyInfo dafnyInfo) 
-    {
+      IEnumerable<Program> programs,
+      DafnyInfo dafnyInfo) {
       DafnyInfo = dafnyInfo;
       var program = MergeBoogiePrograms(programs);
       program = new FunctionToMethodCallRewriter(this).VisitProgram(program);
@@ -62,7 +61,7 @@ namespace DafnyTestGeneration {
       // because inlining a method call in Dafny is equivalent to inlining
       // two procedures in Boogie (Call$$- and Impl$$-prefixed procedures)
       toModify = callGraphVisitor.GetCallees(
-        ImplementationToTarget?.Name, 
+        ImplementationToTarget?.Name,
         DafnyOptions.O.TestGenOptions.TestInlineDepth * 2);
       var annotator = new AnnotationVisitor(this);
       program = annotator.VisitProgram(program);
@@ -90,7 +89,7 @@ namespace DafnyTestGeneration {
       }
       var limit = (uint)DafnyOptions.O.TestGenOptions.SeqLengthLimit;
       Parser.Parse($"axiom (forall<T> y: Seq T :: " +
-                   $"{{ Seq#Length(y) }} Seq#Length(y) <= {limit});", 
+                   $"{{ Seq#Length(y) }} Seq#Length(y) <= {limit});",
         "", out var tmpProgram);
       program.AddTopLevelDeclaration(
         (Axiom)tmpProgram.TopLevelDeclarations.ToList()[0]);
@@ -114,7 +113,7 @@ namespace DafnyTestGeneration {
           declarations[typeName] = new();
         }
         var declarationAsString = declaration.ToString();
-        if (declarationAsString != null && 
+        if (declarationAsString != null &&
             declarations[typeName].Contains(declarationAsString)) {
           toRemove.Add(declaration);
         } else {
@@ -130,9 +129,8 @@ namespace DafnyTestGeneration {
     /// <param name="data">list</param> as part of error trace.
     /// </summary>
     private static AssumeCmd GetAssumePrintCmd(
-      List<object> data, 
-      string separator=" | ") 
-    {
+      List<object> data,
+      string separator = " | ") {
       // first insert separators between the things being printed
       var toPrint = new List<object>();
       data.Iter(obj => toPrint.AddRange(new List<object> { obj, separator }));
@@ -149,10 +147,9 @@ namespace DafnyTestGeneration {
     /// Create a new local variable with a name that has not been reserved
     /// </summary>
     protected static LocalVariable GetNewLocalVariable(
-      Implementation impl, 
-      Type type, 
-      string baseName = "tmp#") 
-    {
+      Implementation impl,
+      Type type,
+      string baseName = "tmp#") {
       int id = 0;
       while (impl.LocVars.Exists(v => v.Name == baseName + id)) {
         id++;
@@ -256,7 +253,7 @@ namespace DafnyTestGeneration {
         }
         return base.VisitCallCmd(node);
       }
-      
+
       public override Program VisitProgram(Program node) {
         node = base.VisitProgram(node);
         return node;
@@ -665,10 +662,10 @@ namespace DafnyTestGeneration {
         List<Ensures> newEnsures = new();
         foreach (var e in node.Ensures) {
           newEnsures.Add(new Ensures(
-            new Token(), 
-            true, 
-            e.Condition, 
-            e.Comment, 
+            new Token(),
+            true,
+            e.Condition,
+            e.Comment,
             e.Attributes));
         }
         node.Ensures = newEnsures;

@@ -116,7 +116,7 @@ namespace DafnyTestGeneration {
       var result = await Task.WhenAny(engine.InferAndVerify(writer, program,
             new PipelineStatistics(), null,
             _ => { }, guid),
-          Task.Delay(TimeSpan.FromSeconds(oldOptions.TimeLimit <= 0 ? 
+          Task.Delay(TimeSpan.FromSeconds(oldOptions.TimeLimit <= 0 ?
             TestGenerationOptions.DefaultTimeLimit : oldOptions.TimeLimit)));
       program = null; // allows to garbage collect what is no longer needed
       CounterexampleStatus = Status.Failure;

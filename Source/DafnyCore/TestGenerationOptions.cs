@@ -16,7 +16,7 @@ namespace Microsoft.Dafny {
     [CanBeNull] public string PrintBpl = null;
     [CanBeNull] public string PrintStats = null;
     public static readonly uint DefaultTimeLimit = 10;
-    
+
     public bool ParseOption(string name, Bpl.CommandLineParseState ps) {
       var args = ps.args;
 

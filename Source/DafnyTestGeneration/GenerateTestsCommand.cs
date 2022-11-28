@@ -15,7 +15,7 @@ public class GenerateTestsCommand : ICommandSpec {
       TestInlineDepth.Instance,
       VerificationTimeLimitOption.Instance,
       VerboseOption.Instance,
-      PrintBpl.Instance, 
+      PrintBpl.Instance,
       PrintStats.Instance,
       TimeLimit.Instance
     }.Concat(ICommandSpec.CommonOptions);
@@ -104,7 +104,7 @@ internal class LoopUnrollOption : IntegerOption {
 }
 
 internal class VerboseOption : BooleanOption {
-  
+
   public static readonly VerboseOption Instance = new();
   public override object DefaultValue => false;
   public override string LongName => "verbose";

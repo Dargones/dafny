@@ -103,8 +103,8 @@ public class CsharpSynthesizer {
     foreach (var (obj, mockName) in objectToMockName) {
       var typeName = compiler.TypeName(obj.Type, wr, obj.Tok);
       // Mocking a trait works only so long as no trait member is accessed
-      if ((method.Outs.First().Type is UserDefinedType userDefinedType) && 
-          (userDefinedType.IsTraitType)) {
+      if ((method.Outs.First().Type is UserDefinedType userDefinedType) &&
+          userDefinedType.IsTraitType) {
         wr.FormatLine($"var {mockName} = new Mock<{typeName}>(MockBehavior.Strict);");
       } else {
         wr.FormatLine($"var {mockName} = new Mock<{typeName}>();");

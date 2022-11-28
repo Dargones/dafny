@@ -158,15 +158,14 @@ namespace DafnyTestGeneration {
       return false;
     }
 
-    public string/*?*/ GetWitnessForType(Type type) {
+    public Expression/*?*/ GetWitnessForType(Type type) {
       if (type is not UserDefinedType userDefinedType ||
           !witnessForType.ContainsKey(userDefinedType.Name)) {
         return null;
       }
 
-      return Printer.ExprToString(
-        new ClonerWithSubstitution(this, new Dictionary<IVariable, string>(),
-          "").CloneExpr(witnessForType[userDefinedType.Name]));
+      return new ClonerWithSubstitution(this, new Dictionary<IVariable, string>(),
+          "").CloneExpr(witnessForType[userDefinedType.Name]);
     }
 
     public Type/*?*/ GetSupersetType(Type type) {
@@ -247,7 +246,7 @@ namespace DafnyTestGeneration {
       return new ClonerWithSubstitution(this, subst, name).CloneValidOrNull(condition);
     }
 
-    public List<(string name, Type type, bool mutable, string/*?*/ defValue)> GetNonGhostFields(UserDefinedType/*?*/ type) {
+    public List<(string name, Type type, bool mutable, Expression/*?*/ defValue)> GetNonGhostFields(UserDefinedType/*?*/ type) {
       if (type == null || !classes.ContainsKey(type.Name)) {
         throw new Exception("Cannot identify class " + type?.Name ??
                             " (null) ");
@@ -255,23 +254,20 @@ namespace DafnyTestGeneration {
 
       var relevantFields = classes[type.Name].Members.OfType<Field>()
         .Where(field => !field.IsGhost);
-      var result = new List<(string name, Type type, bool mutable, string defValue)>();
+      var result = new List<(string name, Type type, bool mutable, Expression defValue)>();
       foreach (var field in relevantFields) {
-        string/*?*/ defValue = null;
+        Expression/*?*/ defExpression = null;
         if (field is ConstantField constantField && constantField.Rhs != null) {
-          var defExpression = new ClonerWithSubstitution(
+          defExpression = new ClonerWithSubstitution(
             this,
             new Dictionary<IVariable, string>(),
             "").CloneExpr(constantField.Rhs);
-          if (defExpression != null) {
-            defValue = Printer.ExprToString(defExpression);
-          }
         }
         var fieldType = Utils.CopyWithReplacements(
           Utils.UseFullName(field.Type),
           classes[type.Name].TypeArgs.ConvertAll(arg => arg.ToString()),
           type.TypeArgs);
-        result.Add(new(field.Name, fieldType, field.IsMutable, defValue));
+        result.Add(new(field.Name, fieldType, field.IsMutable, defExpression));
       }
       return result;
     }

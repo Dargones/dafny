@@ -102,6 +102,8 @@ jobs:
     - name: Create release
       run: |
         python dafny/Scripts/package.py 0.0.0-CI --os ${{ fromJson(needs.populate-matrix-dimensions.outputs.os-mapping)[matrix.os] }} --skip_manual=true --trial=true --github_secret=${{ secrets.GITHUB_TOKEN }} --out=CI.zip
+    - name: Look for z32
+      run: find . -name "z3"
     - if: runner.os == 'Windows'
       shell: pwsh
       run: |
@@ -109,6 +111,8 @@ jobs:
     - if: runner.os != 'Windows'
       run: |
         unzip dafny/Package/CI.zip -d unzippedRelease
+    - name: Look for z33
+      run: find . -name "z3"
     - name: Run integration tests
       if: runner.os == 'Windows'
       env:

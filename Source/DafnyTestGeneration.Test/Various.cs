@@ -226,6 +226,46 @@ module Objects {
         m.Assignments[0] == ("v1", "next", "null") &&
         m.ValueCreation.Count == 2)));
     }
+    
+    [TestMethod]
+    public async Task RecursivelyExtractDatatypeFields() {
+      var source = @"
+module DataTypes {
+  datatype Node = Cons(next:Node) | Nil
+  class List {
+    static method Depth(node: Node) returns (i:int) {
+      if (node.Nil?) {
+        return 0;
+      } else if (node.next.Nil?) {
+        return 1;
+      } else {
+        return 2;
+      }
+    }
+  }
+}
+".TrimStart();
+      var program = Utils.Parse(source);
+      DafnyOptions.O.TestGenOptions.TargetMethod =
+        "DataTypes.List.Depth";
+      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      Assert.AreEqual(3, methods.Count);
+      Assert.IsTrue(methods.All(m =>
+        m.MethodName == "DataTypes.List.Depth"));
+      Assert.IsTrue(methods.All(m =>
+        m.DafnyInfo.IsStatic("DataTypes.List.Depth")));
+      Assert.IsTrue(methods.All(m => m.ArgValues.Count == 1));
+      Assert.IsTrue(methods.All(m => m.ValueCreation[0].value == "DataTypes.Node.Nil"));
+      Assert.IsTrue(methods.Exists(m =>
+        m.ValueCreation.Count == 1));
+      Assert.IsTrue(methods.Exists(m =>
+        m.ValueCreation.Count == 2 && 
+        m.ValueCreation[1].value == $"DataTypes.Node.Cons(next:={m.ValueCreation[0].id})"));
+      Assert.IsTrue(methods.Exists(m =>
+        m.ValueCreation.Count == 3 && 
+        m.ValueCreation[1].value == $"DataTypes.Node.Cons(next:={m.ValueCreation[0].id})" && 
+        m.ValueCreation[2].value == $"DataTypes.Node.Cons(next:={m.ValueCreation[1].id})"));
+    }
 
     [TestMethod]
     public async Task NonNullableObjects() {
@@ -413,6 +453,33 @@ module C {
                                         m.Assignments.Count == 0 &&
                                         m.ArgValues.Count == 1 &&
                                         m.ArgValues[0] == "0.0"));
+    }
+    
+    [TestMethod]
+    public async Task Oracles() {
+      var source = @"
+module M {
+  class Instance {  
+    var i:int;
+    method setI(i:int) 
+      requires i == 10
+      ensures this.i == i 
+      modifies this
+    { 
+      this.i := i;
+    }    
+  }  
+}
+".TrimStart();
+      var program = Utils.Parse(source);
+      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      Assert.AreEqual(1, methods.Count);
+      Assert.IsTrue(methods.All(m =>
+        m.MethodName == "M.Instance.setI"));
+      Assert.IsTrue(methods.All(m =>
+        !m.DafnyInfo.IsStatic("M.Instance.setI")));
+      Assert.IsTrue(methods.All(m => m.ArgValues.Count == 2));
+      Assert.IsTrue(methods.All(m => m.ToString().Contains("expect v0.i == 10")));
     }
 
   }

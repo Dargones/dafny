@@ -10,6 +10,8 @@ namespace DafnyTestGeneration {
 
   public static class Main {
 
+    public static bool setNonZeroExitCode = false;
+
     /// <summary>
     /// This method returns each capturedState that is unreachable, one by one,
     /// and then a line with the summary of how many such states there are, etc.
@@ -19,7 +21,7 @@ namespace DafnyTestGeneration {
     /// <returns></returns>
     public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program) {
 
-      DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
+      DafnyOptions.O.PrintMode = PrintModes.Everything;
       ProgramModification.ResetStatistics();
       var modifications = GetModifications(program).ToList();
       var blocksReached = modifications.Count;
@@ -52,7 +54,7 @@ namespace DafnyTestGeneration {
     }
 
     public static async IAsyncEnumerable<string> GetDeadCodeStatistics(string sourceFile) {
-      DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
+      DafnyOptions.O.PrintMode = PrintModes.Everything;
       var source = await new StreamReader(sourceFile).ReadToEndAsync();
       var program = Utils.Parse(source, sourceFile);
       if (program == null) {
@@ -66,6 +68,7 @@ namespace DafnyTestGeneration {
 
     private static IEnumerable<ProgramModification> GetModifications(Program program) {
       var dafnyInfo = new DafnyInfo(program);
+      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
       // Translate the Program to Boogie:
       var oldPrintInstrumented = DafnyOptions.O.PrintInstrumented;
       DafnyOptions.O.PrintInstrumented = true;
@@ -88,9 +91,10 @@ namespace DafnyTestGeneration {
     /// <returns></returns>
     public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program) {
 
-      DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
+      DafnyOptions.O.PrintMode = PrintModes.Everything;
       ProgramModification.ResetStatistics();
       var dafnyInfo = new DafnyInfo(program);
+      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
       // Generate tests based on counterexamples produced from modifications
 
       foreach (var modification in GetModifications(program)) {
@@ -105,6 +109,7 @@ namespace DafnyTestGeneration {
         }
         yield return testMethod;
       }
+      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
     }
 
     /// <summary>
@@ -112,7 +117,7 @@ namespace DafnyTestGeneration {
     /// </summary>
     public static async IAsyncEnumerable<string> GetTestClassForProgram(string sourceFile) {
 
-      DafnyOptions.O.PrintMode = DafnyOptions.PrintModes.Everything;
+      DafnyOptions.O.PrintMode = PrintModes.Everything;
       TestMethod.ClearTypesToSynthesize();
       var source = new StreamReader(sourceFile).ReadToEnd();
       var program = Utils.Parse(source, sourceFile);
@@ -120,6 +125,7 @@ namespace DafnyTestGeneration {
         yield break;
       }
       var dafnyInfo = new DafnyInfo(program);
+      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
       var rawName = Regex.Replace(sourceFile, "[^a-zA-Z0-9_]", "");
 
       string EscapeDafnyStringLiteral(string str) {

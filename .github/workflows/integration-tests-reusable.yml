@@ -125,6 +125,7 @@ jobs:
           XUNIT_SHARD_COUNT: ${{ inputs.num_shards }}
           DAFNY_RELEASE: ${{ github.workspace }}\unzippedRelease\dafny
         run: |
+          dir /s /b | findstr /i "z3"
           dotnet test --logger trx dafny/Source/IntegrationTests/IntegrationTests.csproj
       - name: Run integration tests
         if: runner.os != 'Windows'

@@ -46,7 +46,7 @@ namespace IntegrationTests {
       IEnumerable<string> AddExtraArgs(IEnumerable<string> args, IEnumerable<string> local) {
         return (extraDafnyArguments is null ? args : args.Append(extraDafnyArguments)).Concat(local);
       }
-      
+
       string repositoryRoot = Path.GetFullPath("../../../../../"); // Up from Source/IntegrationTests/bin/Debug/net6.0/
 
 

@@ -125,6 +125,7 @@ jobs:
           XUNIT_SHARD_COUNT: ${{ inputs.num_shards }}
           DAFNY_RELEASE: ${{ github.workspace }}\unzippedRelease\dafny
         run: |
+          dir /s /b . z3*
           dotnet test --logger trx dafny/Source/IntegrationTests/IntegrationTests.csproj
       - name: Run integration tests
         if: runner.os != 'Windows'
@@ -132,6 +133,7 @@ jobs:
           XUNIT_SHARD: ${{ matrix.shard }}
           XUNIT_SHARD_COUNT: ${{ inputs.num_shards }}
         run: |
+          find . -name "z3"
           ${{ inputs.all_platforms }} && export DAFNY_RELEASE="${{ github.workspace }}/unzippedRelease/dafny"
           dotnet test --logger trx dafny/Source/IntegrationTests/IntegrationTests.csproj
       - uses: actions/upload-artifact@v3

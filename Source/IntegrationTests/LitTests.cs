@@ -50,7 +50,8 @@ namespace IntegrationTests {
 
       var substitutions = new Dictionary<string, object> {
         { "%diff", "diff" },
-        { "%resolveargs", "--useBaseNameForFileName" },
+        { "%verifyargs", "--use-basename-for-filename --cores:2 --verification-time-limit:300" },
+        { "%resolveargs", "--use-basename-for-filename" },
         { "%binaryDir", "." },
         { "%z3", Path.Join("z3", "bin", "z3") },
         { "%repositoryRoot", RepositoryRoot.Replace(@"\", "/") },

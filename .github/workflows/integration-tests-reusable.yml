@@ -127,9 +127,9 @@ jobs:
     - name: Load Z3 (Windows)
       if: runner.os == 'Windows'
       run: |
-        mkdir dafny\Binaries\z3
-        wget -qO- https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x86-win.zip | bsdtar -xf - -C dafny/Binaries/z3 --strip-components=1
-        chmod +x dafny/Binaries/z3/bin/z3
+        mkdir dafny/Binaries/z3
+        curl.exe -o Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x86-win.zip https://github.com
+        tar -xf z3-4.8.5-x86-win.zip -C dafny/Binaries/z3
     - name: Run integration tests
       if: runner.os == 'Windows'
       env:

@@ -130,6 +130,7 @@ jobs:
         mkdir dafny/Binaries/z3
         curl.exe -o z3-4.8.5-x86-win.zip https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x86-win.zip
         tar -xf z3-4.8.5-x86-win.zip -C dafny/Binaries/z3
+        ren dafny/Binaries/z3/bin/z3.exe z3
     - name: Run integration tests
       if: runner.os == 'Windows'
       env:

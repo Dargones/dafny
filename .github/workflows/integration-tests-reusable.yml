@@ -111,12 +111,24 @@ jobs:
     - if: runner.os != 'Windows' && inputs.all_platforms
       run: |
         unzip dafny/Package/CI.zip -d unzippedRelease
-    - name: Load Z3
-      if: "!inputs.all_platforms"
+    - name: Load Z3 (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get install -qq libarchive-tools
         mkdir dafny/Binaries/z3
         wget -qO- https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x64-ubuntu-16.04.zip | bsdtar -xf - -C dafny/Binaries/z3 --strip-components=1
+        chmod +x dafny/Binaries/z3/bin/z3
+    - name: Load Z3 (Mac)
+      if: runner.os == 'MacOS'
+      run: |
+        mkdir dafny/Binaries/z3
+        wget -qO- https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x64-osx-10.14.2.zip | bsdtar -xf - -C dafny/Binaries/z3 --strip-components=1
+        chmod +x dafny/Binaries/z3/bin/z3
+    - name: Load Z3 (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        mkdir dafny\Binaries\z3
+        wget -qO- https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x86-win.zip | bsdtar -xf - -C dafny/Binaries/z3 --strip-components=1
         chmod +x dafny/Binaries/z3/bin/z3
     - name: Run integration tests
       if: runner.os == 'Windows'

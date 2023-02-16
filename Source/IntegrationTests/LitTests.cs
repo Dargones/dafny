@@ -53,7 +53,7 @@ namespace IntegrationTests {
       //string[] defaultTranslateArgs = new[] { "translate", "--use-basename-for-filename", "--cores:2", "--verification-time-limit:300" };
       string[] defaultBuildArgs = new[] { "build", "--use-basename-for-filename", "--cores:2", "--verification-time-limit:300" };
       string[] defaultRunArgs = new[] { "run", "--use-basename-for-filename", "--cores:2", "--verification-time-limit:300" };
-      
+
       var substitutions = new Dictionary<string, object> {
         { "%diff", "diff" },
         { "%trargs", "--use-basename-for-filename --cores:2 --verification-time-limit:300" },

@@ -55,10 +55,12 @@ jobs:
       branch: master
 
   integration-tests:
+    needs: check-deep-tests
+    if: always() && ((needs.check-deep-tests.result == 'success' || contains(github.event.pull_request.labels.*.name, 'run-deep-tests')) || ( github.event_name == 'push' && ( github.ref_name == 'master' || vars.TEST_ON_FORK == 'true' )))
     uses: ./.github/workflows/integration-tests-reusable.yml
     with:
       # By default run only on one platform, but run on all platforms if the PR has the "run-deep-tests"
       # label, and skip checking the nightly build above.
       # This is the best way to fix an issue in master that was only caught by the nightly build.
-      all_platforms: true
+      all_platforms: ${{ contains(github.event.pull_request.labels.*.name, 'run-deep-tests') }}
       num_shards: 5

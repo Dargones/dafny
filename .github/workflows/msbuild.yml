@@ -5,7 +5,6 @@ on:
   pull_request:
     branches: [ master ]
   push:
-    branches: [ z3PathSolution ]
 
 env:
   dotnet-version: 6.0.x # SDK Version for building Dafny

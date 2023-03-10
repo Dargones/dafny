@@ -78,7 +78,7 @@ namespace DafnyTestGeneration {
             toInlineProcedures.Select(implementation => implementation.Name));
         }
       }
-      
+
       var annotator = new AnnotationVisitor(this, options);
       program = annotator.VisitProgram(program);
       AddAxioms(options, program);

@@ -75,7 +75,7 @@ module M {
       Assert.True(methods.Exists(m =>
         Regex.IsMatch(m.ArgValues[1], "-?[1-9][0-9]*")));
     }
-    
+
     [Fact]
     public async Task SelectiveInlining() {
       var source = @"
@@ -253,7 +253,7 @@ module Objects {
         m.Assignments[0] == ("node1", "next", "null") &&
         m.ValueCreation.Count == 2)));
     }
-    
+
     /// <summary>
     /// This test addresses the situation in which there is a class-type object
     /// that does not matter for the construction of a counterexample.

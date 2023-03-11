@@ -102,6 +102,10 @@ Usage: dafny [ option ... ] [ filename ... ]
   
   ---- Language feature selection --------------------------------------------
   
+  /typeSystemRefresh:<value>
+      0 (default) - The type-inference engine and supported types are those of Dafny 4.0.
+      1 - Use an updated type-inference engine. Warning: This mode is under construction and probably won't work at this time.
+
   /unicodeChar:<value>
       0 - The char type represents any UTF-16 code unit.
       1 (default) - The char type represents any Unicode scalar value.
@@ -384,6 +388,9 @@ Usage: dafny [ option ... ] [ filename ... ]
       specified by /testTargetMethod. All method names must be fully-qualified.
   /generateTestPrintBpl:<fileName>
       Print the Boogie code used during test generation.
+  /generateTestPrintCfg:<fileName>
+      Print the control flow graph of the Boogie procedure corresponding to the
+      target method that is used for test generation.
   /generateTestVerbose
       Print various debugging info as comments for the generated tests.
   /generateTestNoPrune

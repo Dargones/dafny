@@ -17,7 +17,7 @@ namespace Microsoft.Dafny {
     public List<String> TestInline = new List<string>();
     public bool Verbose = false;
     [CanBeNull] public string PrintBpl = null;
-    [CanBeNull] public string PrintStats = null;
+    [CanBeNull] public string PrintCfg = null;
     public bool DisablePrune = false;
     public static readonly uint DefaultTimeLimit = 10;
 
@@ -74,6 +74,12 @@ namespace Microsoft.Dafny {
           }
           return true;
 
+        case "generateTestPrintCfg":
+          if (ps.ConfirmArgumentCount(1)) {
+            PrintCfg = args[ps.i];
+          }
+          return true;
+
         case "generateTestVerbose":
           Verbose = true;
           return true;
@@ -110,6 +116,9 @@ namespace Microsoft.Dafny {
     specified by /testTargetMethod. All method names must be fully-qualified.
 /generateTestPrintBpl:<fileName>
     Print the Boogie code used during test generation.
+/generateTestPrintCfg:<fileName>
+    Print the control flow graph of the Boogie procedure corresponding to the
+    target method that is used for test generation.
 /generateTestVerbose
     Print various debugging info as comments for the generated tests.
 /generateTestNoPrune

@@ -86,6 +86,10 @@ namespace DafnyTestGeneration {
         File.WriteAllText(options.TestGenOptions.PrintBpl,
           Utils.GetStringRepresentation(options, program));
       }
+      if (options.TestGenOptions.PrintCfg != null &&
+          options.TestGenOptions.TargetMethod != null) {
+        Utils.PrintCfg(options, program);
+      }
       return GetModifications(program);
     }
 

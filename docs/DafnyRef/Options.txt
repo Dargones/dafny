@@ -385,6 +385,9 @@ Usage: dafny [ option ... ] [ filename ... ]
       should be inlined.
   /generateTestPrintBpl:<fileName>
       Print the Boogie code used during test generation.
+  /generateTestPrintCfg:<fileName>
+      Print the control flow graph of the Boogie procedure corresponding to the
+      target method that is used for test generation.
   /generateTestVerbose
       Print various debugging info as comments for the generated tests.
   /generateTestNoPrune

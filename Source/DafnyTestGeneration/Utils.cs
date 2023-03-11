@@ -121,13 +121,13 @@ namespace DafnyTestGeneration {
       var engine = ExecutionEngine.CreateWithoutSharedCache(options);
       engine.Inline(program);
       streamWriter.Write(program.ProcessLoops(options, implementation)
-        .ToDot(GetBlockId));
+        .ToDot(GetBlockDescription));
     }
 
     /// <summary>
     /// Extract the unique id assigned to the block during test generation.
     /// </summary>
-    private static string GetBlockId(Block block) {
+    private static string GetBlockDescription(Block block) {
       if (!block.cmds.OfType<AssumeCmd>().Any()) {
         return block.Label;
       }
@@ -135,10 +135,13 @@ namespace DafnyTestGeneration {
         cmd => cmd.Attributes != null &&
                cmd.Attributes.Key == "print" &&
                (string)cmd.Attributes.Params[0] == "Block");
+      var partitionCmds = string.Join("; ", block.cmds.OfType<AssumeCmd>()
+        .Where(cmd => cmd.Attributes != null && cmd.Attributes.Key == "partition")
+        .Select(cmd => cmd.Expr.ToString()));
       if (assumeBlockIdCmd == null) {
-        return block.Label;
+        return block.Label + "\n" + partitionCmds;
       }
-      return assumeBlockIdCmd.Attributes.Params.Last().ToString();
+      return assumeBlockIdCmd.Attributes.Params.Last() + "\n" + partitionCmds;
     }
 
     /// <summary>

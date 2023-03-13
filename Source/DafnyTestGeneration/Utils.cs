@@ -186,14 +186,16 @@ namespace DafnyTestGeneration {
       }
 
       private static void AddByMethod(Function func) {
-        func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
+        // func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
         if (func.IsGhost || func.Body == null || func.ByMethodBody != null) {
           return;
         }
         var returnStatement = new ReturnStmt(new RangeToken(new Token(), new Token()),
-          new List<AssignmentRhs> { new ExprRhs(func.Body) });
-        func.ByMethodBody = new BlockStmt(new RangeToken(new Token(), new Token()),
+          new List<AssignmentRhs> { new ExprRhs(new Cloner().CloneExpr(func.Body)) });
+        func.ByMethodBody = new BlockStmt(
+          new RangeToken(new Token(), new Token()),
           new List<Statement> { returnStatement });
+        func.ByMethodTok = new Token();
       }
     }
   }

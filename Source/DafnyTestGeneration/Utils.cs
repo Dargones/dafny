@@ -186,7 +186,7 @@ namespace DafnyTestGeneration {
       }
 
       private static void AddByMethod(Function func) {
-        /*func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
+        func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
         if (func.IsGhost || func.Body == null || func.ByMethodBody != null) {
           return;
         }
@@ -195,7 +195,7 @@ namespace DafnyTestGeneration {
         func.ByMethodBody = new BlockStmt(
           new RangeToken(new Token(), new Token()),
           new List<Statement> { returnStatement });
-        func.ByMethodTok = new Token();*/
+        func.ByMethodTok = new Token();
       }
     }
   }

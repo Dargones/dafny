@@ -21,7 +21,7 @@ namespace DafnyTestGeneration {
     /// loop unrolling may cause false negatives.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program) {
+    public static IEnumerable<string> GetDeadCodeStatistics(Program program) {
 
       program.Reporter.Options.PrintMode = PrintModes.Everything;
 
@@ -33,7 +33,7 @@ namespace DafnyTestGeneration {
 
       // Generate tests based on counterexamples produced from modifications
       for (var i = modifications.Count - 1; i >= 0; i--) {
-        await modifications[i].GetCounterExampleLog(cache);
+        var tmp = modifications[i].GetCounterExampleLog(cache).Result;
         var deadStates = new HashSet<string>();
         if (!modifications[i].IsCovered(cache)) {
           deadStates = modifications[i].CapturedStates;
@@ -56,15 +56,15 @@ namespace DafnyTestGeneration {
                    "loops. False positives are always possible.";
     }
 
-    public static async IAsyncEnumerable<string> GetDeadCodeStatistics(string sourceFile, DafnyOptions options) {
+    public static IEnumerable<string> GetDeadCodeStatistics(string sourceFile, DafnyOptions options) {
       options.PrintMode = PrintModes.Everything;
-      var source = await new StreamReader(sourceFile).ReadToEndAsync();
+      var source = new StreamReader(sourceFile).ReadToEnd();
       var program = Utils.Parse(options, source, sourceFile);
       if (program == null) {
         yield return "Cannot parse program";
         yield break;
       }
-      await foreach (var line in GetDeadCodeStatistics(program)) {
+      foreach (var line in GetDeadCodeStatistics(program)) {
         yield return line;
       }
     }
@@ -109,7 +109,7 @@ namespace DafnyTestGeneration {
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache = null) {
+    public static IEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache = null) {
 
       var options = program.Options;
       options.PrintMode = PrintModes.Everything;
@@ -121,11 +121,11 @@ namespace DafnyTestGeneration {
       var programModifications = GetModifications(cache, program).ToList();
       foreach (var modification in programModifications) {
 
-        var log = await modification.GetCounterExampleLog(cache);
+        var log = modification.GetCounterExampleLog(cache).Result;
         if (log == null) {
           continue;
         }
-        var testMethod = await modification.GetTestMethod(cache, dafnyInfo);
+        var testMethod = modification.GetTestMethod(cache, dafnyInfo).Result;
         if (testMethod == null) {
           continue;
         }
@@ -137,11 +137,11 @@ namespace DafnyTestGeneration {
     /// <summary>
     /// Return a Dafny class (list of lines) with tests for the given Dafny file
     /// </summary>
-    public static async IAsyncEnumerable<string> GetTestClassForProgram(string sourceFile, DafnyOptions options) {
+    public static IEnumerable<string> GetTestClassForProgram(string sourceFile, DafnyOptions options) {
 
       options.PrintMode = PrintModes.Everything;
       TestMethod.ClearTypesToSynthesize();
-      var source = await new StreamReader(sourceFile).ReadToEndAsync();
+      var source = new StreamReader(sourceFile).ReadToEnd();
       var program = Utils.Parse(options, source, sourceFile);
       if (program == null) {
         yield break;
@@ -166,7 +166,7 @@ namespace DafnyTestGeneration {
 
       var cache = new Modifications(options);
       var methodsGenerated = 0;
-      await foreach (var method in GetTestMethodsForProgram(program, cache)) {
+      foreach (var method in GetTestMethodsForProgram(program, cache)) {
         yield return method.ToString();
         methodsGenerated++;
       }

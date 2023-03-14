@@ -31,7 +31,7 @@ module M {
 }
 ".TrimStart();
       var program = Utils.Parse(Setup.GetDafnyOptions(), source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.AreEqual(2, methods.Count(m => m.MethodName == "M.Inlining.b"));
       Assert.AreEqual(1, methods.Count(m => m.MethodName == "M.Inlining.a"));
@@ -67,7 +67,7 @@ module M {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod = "M.Inlining.a";
       options.TestGenOptions.TestInlineDepth = 2;
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "M.Inlining.a"));
       Assert.IsTrue(methods.All(m => !m.DafnyInfo.IsStatic("M.Inlining.a")));
@@ -100,7 +100,7 @@ module M {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod = "M.Inlining.test";
       options.TestGenOptions.TestInline = new List<string>() { "M.Inlining.min" };
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
     }
 
@@ -133,7 +133,7 @@ module Paths {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.Mode =
         TestGenerationOptions.Modes.Path;
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(8, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "Paths.eightPaths"));
       Assert.IsTrue(methods.All(m => m.DafnyInfo.IsStatic("Paths.eightPaths")));
@@ -177,7 +177,7 @@ module Paths {
 }
 ".TrimStart();
       var program = Utils.Parse(Setup.GetDafnyOptions(), source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.IsTrue(methods.Count is >= 2 and <= 6);
       Assert.IsTrue(methods.All(m => m.MethodName == "Paths.eightPaths"));
       Assert.IsTrue(methods.All(m => m.DafnyInfo.IsStatic("Paths.eightPaths")));
@@ -224,7 +224,7 @@ module Objects {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod =
         "Objects.List.IsACircleOfLessThanThree";
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.IsTrue(methods.Count >= 2);
       Assert.IsTrue(methods.All(m =>
         m.MethodName == "Objects.List.IsACircleOfLessThanThree"));
@@ -289,7 +289,7 @@ module M {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod =
         "M.LoopingList.getValue";
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.IsTrue(methods.Count == 1);
     }
 
@@ -315,7 +315,7 @@ module DataTypes {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod =
         "DataTypes.List.Depth";
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m =>
         m.MethodName == "DataTypes.List.Depth"));
@@ -353,7 +353,7 @@ module Module {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod =
         "Module.ignoreNonNullableObject";
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(1, methods.Count);
       var m = methods[0];
       Assert.AreEqual("Module.ignoreNonNullableObject", m.MethodName);
@@ -380,7 +380,7 @@ module M {
       var options = Setup.GetDafnyOptions();
       var program = Utils.Parse(options, source);
       options.TestGenOptions.WarnDeadCode = true;
-      var stats = await Main.GetDeadCodeStatistics(program).ToListAsync();
+      var stats = Main.GetDeadCodeStatistics(program).ToList();
       Assert.IsTrue(stats.Contains("Code at (6,14) is potentially unreachable."));
       Assert.AreEqual(2, stats.Count); // second is line with stats
     }
@@ -399,7 +399,7 @@ method m(a:int) returns (b:int)
       var options = Setup.GetDafnyOptions();
       var program = Utils.Parse(options, source);
       options.TestGenOptions.WarnDeadCode = true;
-      var stats = await Main.GetDeadCodeStatistics(program).ToListAsync();
+      var stats = Main.GetDeadCodeStatistics(program).ToList();
       Assert.AreEqual(1, stats.Count); // the only line with stats
     }
 
@@ -421,7 +421,7 @@ module Test {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TargetMethod = "Test.IsEvenLength";
       options.TestGenOptions.SeqLengthLimit = 1;
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(2, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "Test.IsEvenLength"));
       Assert.IsTrue(methods.All(m => m.DafnyInfo.IsStatic("Test.IsEvenLength")));
@@ -449,7 +449,7 @@ module Math {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TestInlineDepth = 2;
       options.TestGenOptions.TargetMethod = "Math.Min";
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.IsTrue(2 <= methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "Math.Min"));
       Assert.IsTrue(methods.All(m => m.DafnyInfo.IsStatic("Math.Min")));
@@ -478,7 +478,7 @@ module ShortCircuit {
       var program = Utils.Parse(options, source);
       options.TestGenOptions.TestInlineDepth = 1;
       options.TestGenOptions.TargetMethod = "ShortCircuit.Or";
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(2, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "ShortCircuit.Or"));
       Assert.IsTrue(methods.All(m => m.DafnyInfo.IsStatic("ShortCircuit.Or")));
@@ -507,7 +507,7 @@ module C {
 ".TrimStart();
       var options = Setup.GetDafnyOptions();
       var program = Utils.Parse(options, source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.Exists(m => m.MethodName == "A.m" &&
                                         m.DafnyInfo.IsStatic("A.m") &&
@@ -546,7 +546,7 @@ module M {
 }
 ".TrimStart();
       var program = Utils.Parse(Setup.GetDafnyOptions(), source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(1, methods.Count);
       Assert.IsTrue(methods.All(m =>
         m.MethodName == "M.Instance.setI"));

@@ -26,7 +26,7 @@ module C {
 
 ".TrimStart();
       var program = Utils.Parse(Setup.GetDafnyOptions(), source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m =>
         m.MethodName == "C.compareStringLengthToOne"));
@@ -71,7 +71,7 @@ module SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(Setup.GetDafnyOptions(), source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m =>
         m.MethodName ==

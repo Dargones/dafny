@@ -78,13 +78,17 @@ namespace DafnyTestGeneration {
             toInlineProcedures.Select(implementation => implementation.Name));
         }
       }
-      
+
       var annotator = new AnnotationVisitor(this, options);
       program = annotator.VisitProgram(program);
       AddAxioms(options, program);
       if (options.TestGenOptions.PrintBpl != null) {
         File.WriteAllText(options.TestGenOptions.PrintBpl,
           Utils.GetStringRepresentation(options, program));
+      }
+      if (options.TestGenOptions.PrintCfg != null &&
+          options.TestGenOptions.TargetMethod != null) {
+        Utils.PrintCfg(options, program);
       }
       return GetModifications(program);
     }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Program = Microsoft.Dafny.Program;
 
@@ -23,17 +24,18 @@ namespace DafnyTestGeneration {
     public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program) {
 
       program.Reporter.Options.PrintMode = PrintModes.Everything;
-      ProgramModification.ResetStatistics();
-      var modifications = GetModifications(program).ToList();
+
+      var cache = new Modifications(program.Options);
+      var modifications = GetModifications(cache, program).ToList();
       var blocksReached = modifications.Count;
       HashSet<string> allStates = new();
       HashSet<string> allDeadStates = new();
 
       // Generate tests based on counterexamples produced from modifications
       for (var i = modifications.Count - 1; i >= 0; i--) {
-        await modifications[i].GetCounterExampleLog();
+        await modifications[i].GetCounterExampleLog(cache);
         var deadStates = new HashSet<string>();
-        if (!modifications[i].IsCovered) {
+        if (!modifications[i].IsCovered(cache)) {
           deadStates = modifications[i].CapturedStates;
         }
 
@@ -67,7 +69,7 @@ namespace DafnyTestGeneration {
       }
     }
 
-    private static IEnumerable<ProgramModification> GetModifications(Program program) {
+    private static IEnumerable<ProgramModification> GetModifications(Modifications cache, Program program) {
       var options = program.Options;
       var dafnyInfo = new DafnyInfo(program);
       setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
@@ -98,8 +100,8 @@ namespace DafnyTestGeneration {
       // Create modifications of the program with assertions for each block\path
       ProgramModifier programModifier =
         options.TestGenOptions.Mode == TestGenerationOptions.Modes.Path
-          ? new PathBasedModifier()
-          : new BlockBasedModifier();
+          ? new PathBasedModifier(cache)
+          : new BlockBasedModifier(cache);
       return programModifier.GetModifications(boogiePrograms, dafnyInfo);
     }
 
@@ -107,23 +109,23 @@ namespace DafnyTestGeneration {
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program) {
+    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache = null) {
 
       var options = program.Options;
       options.PrintMode = PrintModes.Everything;
-      ProgramModification.ResetStatistics();
       var dafnyInfo = new DafnyInfo(program);
       setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
       // Generate tests based on counterexamples produced from modifications
 
-      var programModifications = GetModifications(program).ToList();
+      cache ??= new Modifications(options);
+      var programModifications = GetModifications(cache, program).ToList();
       foreach (var modification in programModifications) {
 
-        var log = await modification.GetCounterExampleLog();
+        var log = await modification.GetCounterExampleLog(cache);
         if (log == null) {
           continue;
         }
-        var testMethod = await modification.GetTestMethod(dafnyInfo);
+        var testMethod = await modification.GetTestMethod(cache, dafnyInfo);
         if (testMethod == null) {
           continue;
         }
@@ -139,7 +141,7 @@ namespace DafnyTestGeneration {
 
       options.PrintMode = PrintModes.Everything;
       TestMethod.ClearTypesToSynthesize();
-      var source = new StreamReader(sourceFile).ReadToEnd();
+      var source = await new StreamReader(sourceFile).ReadToEndAsync();
       var program = Utils.Parse(options, source, sourceFile);
       if (program == null) {
         yield break;
@@ -162,10 +164,31 @@ namespace DafnyTestGeneration {
         }
       }
 
+      var cache = new Modifications(options);
       var methodsGenerated = 0;
-      await foreach (var method in GetTestMethodsForProgram(program)) {
+      await foreach (var method in GetTestMethodsForProgram(program, cache)) {
         yield return method.ToString();
         methodsGenerated++;
+      }
+
+      foreach (var implementation in cache.Values
+                 .Select(modification => modification.implementation).ToHashSet()) {
+        int failedQueries = cache.ModificationsWithStatus(implementation,
+          ProgramModification.Status.Failure);
+        int queries = failedQueries + cache.ModificationsWithStatus(implementation,
+          ProgramModification.Status.Success);
+        int blocks = implementation.Blocks.Count(block => block.Cmds.Count != 0);
+        int coveredByCounterexamples = cache.NumberOfBlocksCovered(implementation);
+        int coveredByTests = cache.NumberOfBlocksCovered(implementation, onlyIfTestsExists: true);
+        yield return $"// Out of {blocks} non-empty blocks in the " +
+                     $"{implementation.VerboseName.Split(" ")[0]} method, " +
+                     $"{coveredByTests} should be covered by tests " +
+                     $"(assuming no tests were found to be duplicates of each other). " +
+                     $"Moreover, {coveredByCounterexamples} blocks have been found to be reachable " +
+                     $"(i.e. the verifier returned a counterexample and did not timeout). " +
+                     $"A total of {queries} SMT queries were made to cover " +
+                     $"this method or the method into which this method was inlined. " +
+                     $"{failedQueries} queries did not return a counterexample.";
       }
 
       yield return TestMethod.EmitSynthesizeMethods(dafnyInfo);

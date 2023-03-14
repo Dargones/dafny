@@ -68,7 +68,7 @@ module M {
       options.TestGenOptions.TargetMethod = "M.Inlining.a";
       options.TestGenOptions.TestInlineDepth = 2;
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
-      Assert.AreEqual(2, methods.Count);
+      Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "M.Inlining.a"));
       Assert.IsTrue(methods.All(m => !m.DafnyInfo.IsStatic("M.Inlining.a")));
       Assert.IsTrue(methods.All(m => m.ArgValues.Count == 2));
@@ -101,7 +101,7 @@ module M {
       options.TestGenOptions.TargetMethod = "M.Inlining.test";
       options.TestGenOptions.TestInline = new List<string>() { "M.Inlining.min" };
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
-      Assert.AreEqual(2, methods.Count);
+      Assert.AreEqual(3, methods.Count);
     }
 
     [TestMethod]

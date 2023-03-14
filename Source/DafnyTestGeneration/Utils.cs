@@ -109,6 +109,41 @@ namespace DafnyTestGeneration {
       return output.ToString();
     }
 
+    public static void PrintCfg(DafnyOptions options,
+      Microsoft.Boogie.Program program) {
+      program = DeepCloneResolvedProgram(program, options);
+      var implementation = program.Implementations.First(
+        implementation =>
+          implementation.VerboseName.Split(" ")[0] ==
+          options.TestGenOptions.TargetMethod &&
+          implementation.Name.StartsWith("Impl$$"));
+      using var streamWriter = new StreamWriter(options.TestGenOptions.PrintCfg);
+      var engine = ExecutionEngine.CreateWithoutSharedCache(options);
+      engine.Inline(program);
+      streamWriter.Write(program.ProcessLoops(options, implementation)
+        .ToDot(GetBlockDescription));
+    }
+
+    /// <summary>
+    /// Extract the unique id assigned to the block during test generation.
+    /// </summary>
+    private static string GetBlockDescription(Block block) {
+      if (!block.cmds.OfType<AssumeCmd>().Any()) {
+        return block.Label;
+      }
+      var assumeBlockIdCmd = block.cmds.OfType<AssumeCmd>().FirstOrDefault(
+        cmd => cmd.Attributes != null &&
+               cmd.Attributes.Key == "print" &&
+               (string)cmd.Attributes.Params[0] == "Block");
+      var partitionCmds = string.Join("; ", block.cmds.OfType<AssumeCmd>()
+        .Where(cmd => cmd.Attributes != null && cmd.Attributes.Key == "partition")
+        .Select(cmd => cmd.Expr.ToString()));
+      if (assumeBlockIdCmd == null) {
+        return block.Label + "\n" + partitionCmds;
+      }
+      return assumeBlockIdCmd.Attributes.Params.Last() + "\n" + partitionCmds;
+    }
+
     /// <summary>
     /// Turns each function-method into a function-by-method.
     /// Copies body of the function into the body of the corresponding method.
@@ -151,14 +186,16 @@ namespace DafnyTestGeneration {
       }
 
       private static void AddByMethod(Function func) {
-        func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
+        // func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
         if (func.IsGhost || func.Body == null || func.ByMethodBody != null) {
           return;
         }
         var returnStatement = new ReturnStmt(new RangeToken(new Token(), new Token()),
-          new List<AssignmentRhs> { new ExprRhs(func.Body) });
-        func.ByMethodBody = new BlockStmt(new RangeToken(new Token(), new Token()),
+          new List<AssignmentRhs> { new ExprRhs(new Cloner().CloneExpr(func.Body)) });
+        func.ByMethodBody = new BlockStmt(
+          new RangeToken(new Token(), new Token()),
           new List<Statement> { returnStatement });
+        func.ByMethodTok = new Token();
       }
     }
   }

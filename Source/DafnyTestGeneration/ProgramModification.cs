@@ -11,33 +11,14 @@ using Microsoft.Dafny;
 using Program = Microsoft.Boogie.Program;
 
 namespace DafnyTestGeneration {
+  public class Modifications {
+    private readonly DafnyOptions options;
+    public Modifications(DafnyOptions options) {
+      this.options = options;
+    }
 
-  /// <summary>
-  /// Records a modification of the boogie program under test. The modified
-  /// program has an assertion that should fail provided a certain block is
-  /// visited / path is taken.
-  /// </summary>
-  public class ProgramModification {
-    public DafnyOptions Options { get; }
-
-    private static Dictionary<string, ProgramModification>
-      idToModification = new();
-
-    private enum Status { Success, Failure, Untested }
-
-    private Status counterexampleStatus;
-    private readonly Implementation implementation; // implementation under test
-
-    private readonly string uniqueId;
-    public readonly HashSet<string> CapturedStates;
-
-    private readonly string procedure; // procedure to start verification from
-    private Program/*?*/ program;
-    private readonly HashSet<int> coversBlocks;
-    private string/*?*/ counterexampleLog;
-    private TestMethod testMethod;
-
-    public static ProgramModification GetProgramModification(DafnyOptions options, Program program,
+    private readonly Dictionary<string, ProgramModification> idToModification = new();
+    public ProgramModification GetProgramModification(Program program,
       Implementation impl, HashSet<int> coversBlocks, HashSet<string> capturedStates, string procedure,
       string uniqueId) {
       if (!idToModification.ContainsKey(uniqueId)) {
@@ -47,7 +28,54 @@ namespace DafnyTestGeneration {
       return idToModification[uniqueId];
     }
 
-    private ProgramModification(DafnyOptions options, Program program, Implementation impl,
+    public IEnumerable<ProgramModification> Values => idToModification.Values;
+
+    public int NumberOfBlocksCovered(Implementation implementation, bool onlyIfTestsExists = false) {
+      return NumberOfBlocksCovered(implementation, implementation.Blocks
+        .Where(block => block.Cmds.Count != 0)
+        .Select(block => block.UniqueId).ToHashSet(), onlyIfTestsExists);
+    }
+
+    public int NumberOfBlocksCovered(Implementation implementation, HashSet<int> blockIds, bool onlyIfTestsExists = false) {
+      var relevantModifications = ModificationsForImplementation(implementation).Where(modification =>
+        modification.counterexampleStatus == ProgramModification.Status.Success && (!onlyIfTestsExists || (modification.testMethod != null && modification.testMethod.IsValid)));
+      return blockIds.Count(blockId =>
+        relevantModifications.Any(mod => mod.coversBlocks.Contains(blockId)));
+    }
+
+    public IEnumerable<ProgramModification> ModificationsForImplementation(Implementation implementation) =>
+      Values.Where(modification =>
+        modification.implementation == implementation ||
+        options.TestGenOptions.TargetMethod != null);
+
+    internal int ModificationsWithStatus(Implementation implementation, ProgramModification.Status status) =>
+      ModificationsForImplementation(implementation)
+        .Count(mod => mod.counterexampleStatus == status);
+  }
+
+  /// <summary>
+  /// Records a modification of the boogie program under test. The modified
+  /// program has an assertion that should fail provided a certain block is
+  /// visited / path is taken.
+  /// </summary>
+  public class ProgramModification {
+    private DafnyOptions Options { get; }
+
+    internal enum Status { Success, Failure, Untested }
+
+    internal Status counterexampleStatus;
+    public readonly Implementation implementation; // implementation under test
+
+    private readonly string uniqueId;
+    public readonly HashSet<string> CapturedStates;
+
+    private readonly string procedure; // procedure to start verification from
+    private Program/*?*/ program;
+    internal readonly HashSet<int> coversBlocks;
+    private string/*?*/ counterexampleLog;
+    internal TestMethod testMethod;
+
+    public ProgramModification(DafnyOptions options, Program program, Implementation impl,
       HashSet<int> coversBlocks, HashSet<string> capturedStates,
       string procedure, string uniqueId) {
       Options = options;
@@ -104,9 +132,9 @@ namespace DafnyTestGeneration {
     /// version of the original boogie program. Return null if this
     /// counterexample does not cover any new SourceModifications.
     /// </summary>
-    public async Task<string>/*?*/ GetCounterExampleLog() {
+    public async Task<string>/*?*/ GetCounterExampleLog(Modifications cache) {
       if (counterexampleStatus != Status.Untested ||
-          (coversBlocks.Count != 0 && IsCovered)) {
+          (coversBlocks.Count != 0 && IsCovered(cache))) {
         return counterexampleLog;
       }
       var options = SetupOptions(Options, procedure);
@@ -168,12 +196,12 @@ namespace DafnyTestGeneration {
       return counterexampleLog;
     }
 
-    public async Task<TestMethod> GetTestMethod(DafnyInfo dafnyInfo, bool returnNullIfNotUnique = true) {
+    public async Task<TestMethod> GetTestMethod(Modifications cache, DafnyInfo dafnyInfo, bool returnNullIfNotUnique = true) {
       if (Options.TestGenOptions.Verbose) {
         Console.WriteLine(
           $"// Extracting the test for {uniqueId} from the counterexample...");
       }
-      var log = await GetCounterExampleLog();
+      var log = await GetCounterExampleLog(cache);
       if (log == null) {
         return null;
       }
@@ -181,38 +209,20 @@ namespace DafnyTestGeneration {
       if (!testMethod.IsValid || !returnNullIfNotUnique) {
         return testMethod;
       }
-      var duplicate = ModificationsForImplementation(implementation)
+      var duplicate = cache.ModificationsForImplementation(implementation)
         .Where(mod => mod != this && Equals(mod.testMethod, testMethod))
         .FirstOrDefault((ProgramModification)null);
-      if (duplicate == null) {
-        return testMethod;
-      }
-      if (Options.TestGenOptions.Verbose) {
+      if (Options.TestGenOptions.Verbose && duplicate != null) {
         Console.WriteLine(
-          $"// Test for {uniqueId} matches a test previously generated " +
+          $"// Test for {uniqueId} is a duplicate of a test previously generated " +
           $"for {duplicate.uniqueId}. This happens when test generation tool " +
           $"does not know how to differentiate between counterexamples, " +
           $"e.g. if branching is conditional on the result of a trait instance " +
           $"method call.");
       }
-      return null;
+      return testMethod;
     }
 
-    private IEnumerable<ProgramModification> ModificationsForImplementation(Implementation implementation) =>
-      idToModification.Values.Where(modification =>
-        modification.implementation == implementation ||
-        Options.TestGenOptions.TargetMethod != null);
-
-    private bool BlocksAreCovered(Implementation implementation, HashSet<int> blockIds, bool onlyIfTestsExists = false) {
-      var relevantModifications = ModificationsForImplementation(implementation).Where(modification =>
-        modification.counterexampleStatus == Status.Success && (!onlyIfTestsExists || (modification.testMethod != null && modification.testMethod.IsValid)));
-      return blockIds.All(blockId =>
-        relevantModifications.Any(mod => mod.coversBlocks.Contains(blockId)));
-    }
-    public bool IsCovered => BlocksAreCovered(implementation, coversBlocks);
-
-    public static void ResetStatistics() {
-      idToModification = new();
-    }
+    public bool IsCovered(Modifications cache) => cache.NumberOfBlocksCovered(implementation, coversBlocks) == coversBlocks.Count;
   }
 }

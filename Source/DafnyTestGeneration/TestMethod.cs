@@ -210,7 +210,6 @@ namespace DafnyTestGeneration {
 
     private string GetFunctionOfType(ArrowType type) {
       type = (ArrowType)DafnyModelTypeUtils.ReplaceTypeVariables(type, defaultType);
-      getDefaultValueParams = new();
       var lambda =
         $"({string.Join(",", type.TypeArgs.SkipLast(1).Select((t, i) => "a" + i + ":" + t))})" + // parameter types
         "=>" + // return type

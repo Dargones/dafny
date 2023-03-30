@@ -104,13 +104,16 @@ namespace DafnyTestGeneration {
       options.ErrorTrace = 1;
       options.EnhancedErrorMessages = 1;
       options.ModelViewFile = "-";
-      var proverOptions = new SMTLibSolverOptions(options);
-      proverOptions.Parse(options.ProverOptions);
+      var proverOptions = new SMTLibSolverOptions(original);
+      proverOptions.Parse(original.ProverOptions);
       var z3Version = DafnyOptions.GetZ3Version(proverOptions.ProverPath);
       options.ProverOptions = new List<string>() {
         "O:model_evaluator.completion=true",
         "O:model.completion=true"
       };
+      foreach (var option in original.ProverOptions) {
+        options.ProverOptions.Add(option);
+      }
       if (z3Version is null || z3Version < new Version(4, 8, 6)) {
         options.ProverOptions.Insert(0, "O:model.compress=false");
       } else {

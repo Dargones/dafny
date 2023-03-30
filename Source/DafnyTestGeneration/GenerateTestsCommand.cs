@@ -19,7 +19,8 @@ public class GenerateTestsCommand : ICommandSpec {
       PrintBpl,
       PrintCfg,
       DisablePrune,
-      InlineAcrossModules
+      InlineAcrossModules,
+      CommonOptionBag.SolverPath
     }.Concat(ICommandSpec.ConsoleOutputOptions).
       Concat(ICommandSpec.ResolverOptions);
 

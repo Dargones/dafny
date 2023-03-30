@@ -18,7 +18,8 @@ public class GenerateTestsCommand : ICommandSpec {
       Verbose,
       PrintBpl,
       PrintCfg,
-      DisablePrune
+      DisablePrune,
+      InlineAcrossModules
     }.Concat(ICommandSpec.ConsoleOutputOptions).
       Concat(ICommandSpec.ResolverOptions);
 
@@ -87,6 +88,9 @@ path - Prints path-coverage tests for the given program.");
   public static readonly Option<bool> DisablePrune = new("--no-prune",
     "Disable axiom pruning that Dafny uses to speed up verification.") {
   };
+  public static readonly Option<bool> InlineAcrossModules = new("--inline-across-modules",
+    "Allow inlining functions and methods from other modules/files.") {
+  };
   static GenerateTestsCommand() {
     DafnyOptions.RegisterLegacyBinding(LoopUnroll, (options, value) => {
       options.LoopUnrollCount = value;
@@ -117,6 +121,9 @@ path - Prints path-coverage tests for the given program.");
     });
     DafnyOptions.RegisterLegacyBinding(DisablePrune, (options, value) => {
       options.TestGenOptions.DisablePrune = value;
+    });
+    DafnyOptions.RegisterLegacyBinding(InlineAcrossModules, (options, value) => {
+      options.VerifyAllModules = value;
     });
   }
 }

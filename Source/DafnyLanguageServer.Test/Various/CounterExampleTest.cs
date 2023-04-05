@@ -179,6 +179,25 @@ namespace Microsoft.Dafny.LanguageServer.IntegrationTest.Various {
     }
 
     [TestMethod]
+    public async Task ConstantField() {
+      var source = @"
+      class Value {
+        const v:int;
+      }
+      method a(v:Value) {
+        assert v.v != 42;
+      }
+      ".TrimStart();
+      var documentItem = CreateTestDocument(source);
+      await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
+      var counterExamples = (await RequestCounterExamples(documentItem.Uri)).ToArray();
+      Assert.AreEqual(1, counterExamples.Length);
+      Assert.AreEqual(1, counterExamples[0].Variables.Count);
+      Assert.IsTrue(counterExamples[0].Variables.ContainsKey("v:_module.Value?"));
+      Assert.AreEqual("(v := 42)", counterExamples[0].Variables["v:_module.Value?"]);
+    }
+
+    [TestMethod]
     public async Task FractionFieldAsReal() {
       var source = @"
       class Value {

@@ -496,7 +496,7 @@ namespace DafnyTestGeneration {
       }
       if (variable != null && variable.Children.ContainsKey(field.name) &&
           variable.Children[field.name].Count == 1) {
-        return ExtractVariable(variable.Children[field.name].First(), null);
+        return ExtractVariable(variable.Children[field.name].First(), field.type);
       }
 
       var previouslyCreated = ValueCreation.FirstOrDefault(obj =>

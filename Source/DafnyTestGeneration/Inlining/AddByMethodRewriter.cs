@@ -12,9 +12,9 @@ namespace DafnyTestGeneration.Inlining;
 /// <summary> Turns each function into a function-by-method and removes all opaque attributes. </summary>
 public class AddByMethodRewriter : IRewriter {
 
-  protected internal AddByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
+  public AddByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
 
-  internal void PreResolve(Program program) {
+  public void PreResolve(Program program) {
     AddByMethod(program.DefaultModule);
   }
 
@@ -55,8 +55,7 @@ public class AddByMethodRewriter : IRewriter {
     func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
     if (func.IsGhost || 
         func.Body == null || 
-        func.ByMethodBody != null ||
-        (!Utils.AttributeFinder.MembersHasAttribute(func, TestGenerationOptions.TestInlineAttribute) && !Utils.AttributeFinder.MembersHasAttribute(func, TestGenerationOptions.TestEntryAttribute))) {
+        func.ByMethodBody != null) {
       return;
     }
 

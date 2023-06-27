@@ -16,9 +16,9 @@ public class SeparateByMethodRewriter : IRewriter {
 
   private readonly List<Method> methodsToAdd = new();
 
-  protected internal SeparateByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
+  public SeparateByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
 
-  internal void PostResolve(Program program) {
+  public void PostResolve(Program program) {
     SeparateByMethod(program.DefaultModule);
   }
 
@@ -37,5 +37,8 @@ public class SeparateByMethodRewriter : IRewriter {
       return;
     }
     methodsToAdd.Add(func.ByMethodDecl);
+    func.ByMethodDecl = null;
+    func.ByMethodBody = null;
+    func.ByMethodTok = null;
   }
 }

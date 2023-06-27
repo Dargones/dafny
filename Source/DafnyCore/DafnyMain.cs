@@ -13,6 +13,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DafnyCore;
+using Microsoft.BaseTypes;
 using Microsoft.Boogie;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -151,6 +152,17 @@ to also include a directory containing the `z3` executable.
              && statistics.OutOfResourceCount == 0
              && statistics.OutOfMemoryCount == 0;
     }
+    
+    private static IList<Object> DeclarationHasAttribute(Boogie.Declaration declaration, string attribute) {
+      var attributes = declaration.Attributes;
+      while (attributes != null) {
+        if (attributes.Key == attribute) {
+          return attributes.Params;
+        }
+        attributes = attributes.Next;
+      }
+      return null;
+    }
 
     /// <summary>
     /// Resolve, type check, infer invariants for, and verify the given Boogie program.
@@ -191,10 +203,28 @@ to also include a directory containing the `z3` executable.
           return (outcome, stats);
 
         case PipelineOutcome.ResolvedAndTypeChecked:
+
+          options.ProcedureInlining = CoreOptions.Inlining.Assert;
+          // new AssumeFreeEnsures().VisitProgram(program);
+          program.TopLevelDeclarations
+            .Where(declaration => declaration is Implementation or Procedure && 
+                                  (DeclarationHasAttribute(declaration, "inlineDepth") != null))
+            .Iter(declaration => declaration.Attributes = new QKeyValue(new Token(), "inline", 
+              DeclarationHasAttribute(declaration, "inlineDepth"), declaration.Attributes));
+          program.TopLevelDeclarations
+            .Where(declaration => declaration is Implementation or Procedure && 
+                                  (DeclarationHasAttribute(declaration, "entry") == null) && 
+                                  (DeclarationHasAttribute(declaration, "inline") == null) &&
+                                  !(declaration as NamedDeclaration).Name.StartsWith("$"))
+            .Iter(declaration => declaration.Attributes = new QKeyValue(new Token(), "inline", 
+              new List<object>{new Boogie.LiteralExpr(new Token(), BigNum.ONE)}, declaration.Attributes));
+          program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && (declaration as NamedDeclaration).Name.StartsWith("CheckWellformed$$"));
           engine.EliminateDeadVariables(program);
           engine.CollectModSets(program);
           engine.CoalesceBlocks(program);
           engine.Inline(program);
+          program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && (DeclarationHasAttribute(declaration, "entry") == null) && !(declaration as NamedDeclaration).Name.StartsWith("$"));
+          program.RemoveTopLevelDeclarations(declaration => declaration is Implementation implementation && (implementation.Name.StartsWith("Call$$") || implementation.Name.StartsWith("CheckWellformed$$") || implementation.Name.StartsWith("CheckWellFormed$$")));
           var inferAndVerifyOutcome = await engine.InferAndVerify(output, program, stats, programId);
           return (inferAndVerifyOutcome, stats);
 

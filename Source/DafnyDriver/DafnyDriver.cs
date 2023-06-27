@@ -358,6 +358,27 @@ namespace Microsoft.Dafny {
       }
       return CommandLineArgumentsResult.OK;
     }
+    
+    /// <summary>
+    /// Returns null on success, or an error string otherwise.
+    /// </summary>
+    private static string ParseCheck(TextReader stdIn, IReadOnlyList<DafnyFile /*!*/> /*!*/ files, string /*!*/ programName,
+        DafnyOptions options, out Program program)
+    {
+      string err = DafnyMain.Parse(files, programName, options, out program);
+      if (err != null) {
+        return err;
+      }
+      new DafnyTestGeneration.Inlining.AddByMethodRewriter(program.Reporter).PreResolve(program);
+      new DafnyTestGeneration.Inlining.RemoveShortCircuitingCloner().Visit(program);
+      err = DafnyMain.Resolve(program);
+      if (err != null) {
+        return err;
+      }
+      new DafnyTestGeneration.Inlining.FunctionCallToMethodCallCloner().Visit(program);
+      new DafnyTestGeneration.Inlining.SeparateByMethodRewriter(new ConsoleErrorReporter(options)).PostResolve(program);
+      return err;
+    }
 
     private async Task<ExitValue> ProcessFilesAsync(IReadOnlyList<DafnyFile/*!*/>/*!*/ dafnyFiles,
       ReadOnlyCollection<string> otherFileNames,
@@ -424,7 +445,8 @@ namespace Microsoft.Dafny {
         return DafnyDoc.DoDocumenting(dafnyFiles, options.SourceFolders, programName, options);
       }
 
-      err = DafnyMain.ParseCheck(options.Input, dafnyFiles, programName, options, out var dafnyProgram);
+      options.DefiniteAssignmentLevel = 3;
+      err = ParseCheck(options.Input, dafnyFiles, programName, options, out var dafnyProgram);
       if (err != null) {
         exitValue = ExitValue.DAFNY_ERROR;
         options.Printer.ErrorWriteLine(options.OutputWriter, err);
@@ -432,7 +454,7 @@ namespace Microsoft.Dafny {
           && options.DafnyVerify) {
 
         var boogiePrograms =
-          await DafnyMain.LargeStackFactory.StartNew(() => Translate(engine.Options, dafnyProgram).ToList());
+          await DafnyMain.LargeStackFactory.StartNew(() => Translate(engine.Options, dafnyProgram).ToList().ConvertAll(program => new Tuple<string, Bpl.Program>(program.Item1, new DafnyTestGeneration.Inlining.AddImplementationsForCallsRewriter(options).VisitProgram(program.Item2))));
 
         string baseName = cce.NonNull(Path.GetFileName(dafnyFileNames[^1]));
         var (verified, outcome, moduleStats) = await BoogieAsync(options, baseName, boogiePrograms, programId);

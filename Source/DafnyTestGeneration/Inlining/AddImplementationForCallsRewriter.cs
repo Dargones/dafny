@@ -85,6 +85,7 @@ public class AddImplementationsForCallsRewriter : ReadOnlyVisitor {
     implsToAdd = new();
     node = base.VisitProgram(node);
     node.AddTopLevelDeclarations(implsToAdd);
-    return Utils.DeepCloneResolvedProgram(node, options);
+    // return Utils.DeepCloneResolvedProgram(node, options);
+    return node;
   }
 }

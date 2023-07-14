@@ -1,5 +1,7 @@
-#nullable disable
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 
+#nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Boogie;
@@ -18,7 +20,7 @@ namespace DafnyTestGeneration.Inlining;
 /// inlining of Dafny methods further down the road.
 /// </summary>
 public class AddImplementationsForCallsRewriter : ReadOnlyVisitor {
-  
+
   private const string CallPrefix = "Call$$";
   private readonly DafnyOptions options;
   private List<Implementation> implsToAdd = new();
@@ -49,7 +51,7 @@ public class AddImplementationsForCallsRewriter : ReadOnlyVisitor {
       .Where(p1 => !node.OutParams
         .Exists(p2 => p2.Name == p1.Name)).ToList()
       .ConvertAll(p1 =>
-        (Variable)new LocalVariable(new Token(), (TypedIdent) p1.TypedIdent.Clone())).ToList();
+        (Variable)new LocalVariable(new Token(), (TypedIdent)p1.TypedIdent.Clone())).ToList();
     // you cannot directly reuse node.InParams and node.OutParams
     // because they might contain where clauses which have to be removed
     var inParams = node.InParams.ConvertAll(v =>

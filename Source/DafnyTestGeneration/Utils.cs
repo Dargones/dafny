@@ -1,3 +1,6 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
 using System;
 using System.Collections.Generic;
@@ -5,13 +8,10 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
-using DafnyServer.CounterexampleGeneration;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Errors = Microsoft.Dafny.Errors;
-using Parser = Microsoft.Dafny.Parser;
+using Microsoft.Dafny.LanguageServer.CounterExampleGeneration;
+using Declaration = Microsoft.Boogie.Declaration;
 using Program = Microsoft.Dafny.Program;
 using Token = Microsoft.Dafny.Token;
 using Type = Microsoft.Dafny.Type;
@@ -47,22 +47,12 @@ namespace DafnyTestGeneration {
       return DafnyModelTypeUtils
         .ReplaceType(type, _ => true, typ => new UserDefinedType(
           new Token(),
-          RemoveSystemPrefixForTuples(
+          DafnyModelTypeUtils.ConvertTupleName(
             typ?.ResolvedClass?.FullName == null ?
             typ.Name :
             typ.ResolvedClass.FullName + (typ.Name.Last() == '?' ? "?" : "")),
           typ.TypeArgs));
     }
-
-    private static string RemoveSystemPrefixForTuples(string typeName) {
-      if (typeName.ToLower().StartsWith("_system._tuple#")) {
-        return typeName[8..];
-      }
-      if (typeName.StartsWith("_System.Tuple")) {
-        return "_tuple#" + typeName[13..];
-      }
-      return typeName;
-    } 
 
     /// <summary>
     /// Copy a <param name="type"></param> and recursively replace type
@@ -84,8 +74,8 @@ namespace DafnyTestGeneration {
       replacements["_System.object"] =
         new UserDefinedType(new Token(), "object", new List<Type>());
       return DafnyModelTypeUtils.ReplaceType(type, _ => true,
-        typ => replacements.ContainsKey(typ.Name) ?
-          replacements[typ.Name] :
+        typ => replacements.TryGetValue(typ.Name, out var replacement) ?
+          replacement :
           new UserDefinedType(typ.tok, typ.Name, typ.TypeArgs));
     }
 
@@ -102,7 +92,7 @@ namespace DafnyTestGeneration {
       if (!resolve) {
         return program;
       }
-      new Resolver(program).ResolveProgram(program, CancellationToken.None);
+      new ProgramResolver(program).Resolve(CancellationToken.None);
       return program;
     }
 
@@ -136,66 +126,67 @@ namespace DafnyTestGeneration {
       options.PrintFile = oldPrintFile;
       return output.ToString();
     }
-    
-    public static void PrintCfg(DafnyOptions options,
-      Microsoft.Boogie.Program program) {
-      program = DeepCloneResolvedProgram(program, options);
-      var implementation = program.Implementations.First(
-        implementation =>
-          implementation.VerboseName.Split(" ")[0] ==
-          options.TestGenOptions.TargetMethod &&
-          implementation.Name.StartsWith("Impl$$"));
-      using var streamWriter = new StreamWriter(options.TestGenOptions.PrintCfg);
-      var engine = ExecutionEngine.CreateWithoutSharedCache(options);
-      engine.Inline(program);
-      streamWriter.Write(program.ProcessLoops(options, implementation)
-        .ToDot(GetBlockId));
-    }
 
     /// <summary>
-    /// Extract the unique id assigned to the block during test generation.
+    /// Extract string mapping this basic block to a location in Dafny code.
     /// </summary>
     public static string GetBlockId(Block block) {
       var state = block.cmds.OfType<AssumeCmd>().FirstOrDefault(
-        cmd => cmd.Attributes != null &&
-               cmd.Attributes.Key == "captureState" &&
-               cmd.Attributes.Params != null &&
-               cmd.Attributes.Params.Count() == 1)
+          cmd => cmd.Attributes != null &&
+                 cmd.Attributes.Key == "captureState" &&
+                 cmd.Attributes.Params != null &&
+                 cmd.Attributes.Params.Count() == 1)
         ?.Attributes.Params[0].ToString();
-      return state != null ? Regex.Replace(state, @"\s+", "") : block.Label;
+      return state == null ? null : Regex.Replace(state, @"\s+", "");
     }
 
-    /// <summary>
-    /// Scan an unresolved dafny program to look for a specific attribute
-    /// </summary>
-    internal class AttributeFinder {
-
-      public static bool ProgramHasAttribute(Program program, string attribute) {
-        return DeclarationHasAttribute(program.DefaultModule, attribute);
-      }
-
-      private static bool DeclarationHasAttribute(TopLevelDecl decl, string attribute) {
-        if (decl is LiteralModuleDecl moduleDecl) {
-          return moduleDecl.ModuleDef.TopLevelDecls
-            .Any(declaration => DeclarationHasAttribute(declaration, attribute));
+    public static IList<object> GetAttributeValue(Implementation implementation, string attribute) {
+      var attributes = implementation.Attributes;
+      while (attributes != null) {
+        if (attributes.Key == attribute) {
+          return attributes.Params;
         }
-        if (decl is TopLevelDeclWithMembers withMembers) {
-          return withMembers.Members
-            .Any(member => MembersHasAttribute(member, attribute));
-        }
-        return false;
+        attributes = attributes.Next;
       }
+      return new List<object>();
+    }
 
-      public static bool MembersHasAttribute(MemberDecl member, string attribute) {
-        var attributes = member.Attributes;
-        while (attributes != null) {
-          if (attributes.Name == attribute) {
-            return true;
-          }
-          attributes = attributes.Prev;
+    public static bool DeclarationHasAttribute(Declaration declaration, string attribute) {
+      var attributes = declaration.Attributes;
+      while (attributes != null) {
+        if (attributes.Key == attribute) {
+          return true;
         }
-        return false;
+        attributes = attributes.Next;
       }
+      return false;
+    }
+
+    public static bool ProgramHasAttribute(Program program, string attribute) {
+      return DeclarationHasAttribute(program.DefaultModule, attribute);
+    }
+
+    private static bool DeclarationHasAttribute(TopLevelDecl decl, string attribute) {
+      if (decl is LiteralModuleDecl moduleDecl) {
+        return moduleDecl.ModuleDef.TopLevelDecls
+          .Any(declaration => DeclarationHasAttribute(declaration, attribute));
+      }
+      if (decl is TopLevelDeclWithMembers withMembers) {
+        return withMembers.Members
+          .Any(member => MembersHasAttribute(member, attribute));
+      }
+      return false;
+    }
+
+    public static bool MembersHasAttribute(MemberDecl member, string attribute) {
+      var attributes = member.Attributes;
+      while (attributes != null) {
+        if (attributes.Name == attribute) {
+          return true;
+        }
+        attributes = attributes.Prev;
+      }
+      return false;
     }
   }
 }

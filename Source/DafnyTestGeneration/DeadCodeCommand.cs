@@ -1,3 +1,7 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
+#nullable disable
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Invocation;
@@ -12,7 +16,6 @@ public class DeadCodeCommand : ICommandSpec {
       // appropriately copied over in the GenerateTestCommand.CopyForProcedure method 
       GenerateTestsCommand.LoopUnroll,
       GenerateTestsCommand.SequenceLengthLimit,
-      GenerateTestsCommand.Target,
       BoogieOptionBag.SolverLog,
       BoogieOptionBag.SolverOption,
       BoogieOptionBag.SolverOptionHelp,
@@ -39,5 +42,6 @@ public class DeadCodeCommand : ICommandSpec {
 
     dafnyOptions.TestGenOptions.Mode = TestGenerationOptions.Modes.Block;
     dafnyOptions.TestGenOptions.WarnDeadCode = true;
+    dafnyOptions.Set(DafnyConsolePrinter.ShowSnippets, false);
   }
 }

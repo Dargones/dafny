@@ -1,7 +1,16 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Boogie;
+using Microsoft.Dafny;
+using IdentifierExpr = Microsoft.Boogie.IdentifierExpr;
+using LiteralExpr = Microsoft.Boogie.LiteralExpr;
+using Program = Microsoft.Boogie.Program;
+using Token = Microsoft.Boogie.Token;
+using Type = Microsoft.Boogie.Type;
 
 namespace DafnyTestGeneration {
 
@@ -25,9 +34,11 @@ namespace DafnyTestGeneration {
       VisitProgram(p); // populates paths
       foreach (var path in paths) {
         path.AssertPath();
-        var name = TargetImplementationVerboseName ?? path.Impl.VerboseName;
-        yield return modifications.GetProgramModification(p, path.Impl, new HashSet<string>(), name,
-          $"{name.Split(" ")[0]}" + path.name);
+        var testEntryNames = Utils.DeclarationHasAttribute(path.Impl, TestGenerationOptions.TestInlineAttribute)
+          ? TestEntries
+          : new() { path.Impl.VerboseName };
+        yield return modifications.GetProgramModification(p, path.Impl, new HashSet<string>(), testEntryNames,
+          $"{path.Impl.VerboseName.Split(" ")[0]}" + path.name);
         path.NoAssertPath();
       }
     }
@@ -95,8 +106,8 @@ namespace DafnyTestGeneration {
 
       // if the block contains a return command, it is the last one in the path:
       if (block.TransferCmd is ReturnCmd) {
-        paths.Add(new Path(impl, currSet.ToList(), block, 
-          $"(path through {string.Join(",", currList.ConvertAll(block => Utils.GetBlockId(block)))},{Utils.GetBlockId(block)})"));
+        paths.Add(new Path(impl, currSet.ToList(), block,
+          $"(path through {string.Join(",", currList.ConvertAll(Utils.GetBlockId).Where(id => id != null))},{Utils.GetBlockId(block) ?? ""})"));
         return;
       }
 

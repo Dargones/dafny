@@ -1,8 +1,9 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Dafny;
 using Function = Microsoft.Dafny.Function;
 using IdentifierExpr = Microsoft.Dafny.IdentifierExpr;
@@ -26,14 +27,15 @@ namespace DafnyTestGeneration {
     public readonly Dictionary<string, string> ToImportAs = new();
     private readonly Dictionary<string, (List<TypeParameter> args, Type superset)> subsetToSuperset = new();
     private readonly Dictionary<string, Expression> witnessForType = new();
-    private readonly Dictionary<string, MemberDecl> userDefinedConstructorForType = new();
     private readonly Dictionary<string, (IVariable variable, Expression expr)> conditionForType = new();
     // list of top level scopes accessible from the testing module
     private readonly List<VisibilityScope> scopes;
     public bool SetNonZeroExitCode = false;
+    private readonly bool suppressErrorMessages = false;
 
-    public DafnyInfo(Program program) {
-      this.Options = program.Options;
+    public DafnyInfo(Program program, bool suppressErrorMessages = false) {
+      this.suppressErrorMessages = suppressErrorMessages;
+      Options = program.Options;
       subsetToSuperset["_System.string"] = new(
         new List<TypeParameter>(),
         new SeqType(new CharType()));
@@ -66,7 +68,11 @@ namespace DafnyTestGeneration {
         return new List<Type>
           { Utils.UseFullName(functions[callable].ResultType) };
       }
-      Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+
+      if (!suppressErrorMessages) {
+        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+      }
+
       SetNonZeroExitCode = true;
       return new List<Type>();
     }
@@ -78,7 +84,11 @@ namespace DafnyTestGeneration {
       if (functions.ContainsKey(callable)) {
         return functions[callable].TypeArgs;
       }
-      Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+
+      if (!suppressErrorMessages) {
+        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+      }
+
       SetNonZeroExitCode = true;
       return new List<TypeParameter>();
     }
@@ -93,7 +103,10 @@ namespace DafnyTestGeneration {
         result.AddRange(functions[callable].TypeArgs);
         clazz = functions[callable].EnclosingClass;
       } else {
-        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+        if (!suppressErrorMessages) {
+          Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+        }
+
         SetNonZeroExitCode = true;
         return result;
       }
@@ -110,7 +123,11 @@ namespace DafnyTestGeneration {
         return functions[callable].Formals.Select(arg =>
           Utils.UseFullName(arg.Type)).ToList(); ;
       }
-      Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+
+      if (!suppressErrorMessages) {
+        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+      }
+
       SetNonZeroExitCode = true;
       return new List<Type>();
     }
@@ -122,7 +139,11 @@ namespace DafnyTestGeneration {
       if (functions.ContainsKey(callable)) {
         return functions[callable].IsStatic;
       }
-      Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+
+      if (!suppressErrorMessages) {
+        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callable}");
+      }
+
       SetNonZeroExitCode = true;
       return true;
     }
@@ -137,46 +158,39 @@ namespace DafnyTestGeneration {
       return true;
     }
 
-    private uint GetTestInlineAttributeValue(MemberDecl callable) {
+    /// <summary>
+    /// Check that function/methods annotated with :testInline use this attribute correctly
+    /// </summary>
+    private void CheckInlineAttributeValue(MemberDecl callable) {
       Attributes attributes = callable.Attributes;
       while (attributes != null) {
         if (attributes.Name == TestGenerationOptions.TestInlineAttribute) {
           if (attributes.Args.Count != 1) {
-            Options.Printer.ErrorWriteLine(Options.ErrorWriter,
-              $"*** Error: :{TestGenerationOptions.TestInlineAttribute} " +
-              $"attribute must be followed by a positive integer to specify " +
-              $"the recursion unrolling limit (one means no unrolling)");
+            if (!suppressErrorMessages) {
+              Options.Printer.ErrorWriteLine(Options.ErrorWriter,
+                $"*** Error: :{TestGenerationOptions.TestInlineAttribute} " +
+                $"attribute must be followed by a positive integer to specify " +
+                $"the recursion unrolling limit (one means no unrolling)");
+            }
+
             SetNonZeroExitCode = true;
-            return 1;
+            return;
           }
           if (uint.TryParse(attributes.Args.First().ToString(), out uint result) && result > 0) {
-            return result;
+            return;
           }
-          Options.Printer.ErrorWriteLine(Options.ErrorWriter,
-            $"*** Error: {TestGenerationOptions.TestInlineAttribute} value " +
-            $"on {callable.FullName} must be a positive integer");
+
+          if (!suppressErrorMessages) {
+            Options.Printer.ErrorWriteLine(Options.ErrorWriter,
+              $"*** Error: {TestGenerationOptions.TestInlineAttribute} value " +
+              $"on {callable.FullName} must be a positive integer");
+          }
+
           SetNonZeroExitCode = true;
-          return 0;
+          return;
         }
         attributes = attributes.Prev;
       }
-      return 0;
-    }
-
-    /// <summary>
-    /// Return the number of times a given Dafny method should be inlined for
-    /// test generation purposes.
-    /// </summary>
-    /// <param name="callable"></param>
-    /// <returns></returns>
-    public uint TimesToInline(string callable) {
-      if (methods.ContainsKey(callable)) {
-        return GetTestInlineAttributeValue(methods[callable]);
-      }
-      if (functions.ContainsKey(callable)) {
-        return GetTestInlineAttributeValue(functions[callable]);
-      }
-      return 0;
     }
 
     public bool IsAccessible(string callable) {
@@ -197,14 +211,6 @@ namespace DafnyTestGeneration {
 
       return Printer.ExprToString(Options, new ClonerWithSubstitution(this, new Dictionary<IVariable, string>(),
         "").CloneExpr(witnessForType[userDefinedType.Name]));
-    }
-
-    public string/*?*/ GetUserDefinedConstrutor(Type type) {
-      if (type is not UserDefinedType userDefinedType ||
-          !userDefinedConstructorForType.ContainsKey(userDefinedType.ToString())) {
-        return null;
-      }
-      return userDefinedConstructorForType[userDefinedType.ToString()].FullDafnyName + "()";
     }
 
     public Type/*?*/ GetSupersetType(Type type) {
@@ -250,7 +256,11 @@ namespace DafnyTestGeneration {
             new ClonerWithSubstitution(this, subst, receiver).CloneValidOrNull(e.E))
           .Where(e => e != null);
       }
-      Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callableName}");
+
+      if (!suppressErrorMessages) {
+        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callableName}");
+      }
+
       SetNonZeroExitCode = true;
       return new List<Expression>();
     }
@@ -273,7 +283,11 @@ namespace DafnyTestGeneration {
             new ClonerWithSubstitution(this, subst, receiver).CloneValidOrNull(e.E))
           .Where(e => e != null);
       }
-      Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callableName}");
+
+      if (!suppressErrorMessages) {
+        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify callable {callableName}");
+      }
+
       SetNonZeroExitCode = true;
       return new List<Expression>();
     }
@@ -291,7 +305,11 @@ namespace DafnyTestGeneration {
 
     public List<(string name, Type type, bool mutable, string/*?*/ defValue)> GetNonGhostFields(UserDefinedType/*?*/ type) {
       if (type == null || !classes.ContainsKey(type.Name)) {
-        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        if (!suppressErrorMessages) {
+          Options.Printer.ErrorWriteLine(Options.ErrorWriter,
+            $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        }
+
         SetNonZeroExitCode = true;
         return new List<(string name, Type type, bool mutable, string/*?*/ defValue)>();
       }
@@ -321,7 +339,11 @@ namespace DafnyTestGeneration {
 
     public bool IsTrait(UserDefinedType/*?*/ type) {
       if (type == null || !classes.ContainsKey(type.Name)) {
-        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        if (!suppressErrorMessages) {
+          Options.Printer.ErrorWriteLine(Options.ErrorWriter,
+            $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        }
+
         SetNonZeroExitCode = true;
         return false;
       }
@@ -381,18 +403,34 @@ namespace DafnyTestGeneration {
       }
       return result;
     }
+
+    public bool IsClassType(UserDefinedType/*?*/ type) {
+      if (type == null || !classes.ContainsKey(type.Name)) {
+        return false;
+      }
+      return true;
+    }
+
     public bool IsExtern(UserDefinedType/*?*/ type) {
       if (type == null || !classes.ContainsKey(type.Name)) {
-        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        if (!suppressErrorMessages) {
+          Options.Printer.ErrorWriteLine(Options.ErrorWriter,
+            $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        }
+
         SetNonZeroExitCode = true;
-        return true;
+        return false;
       }
       return classes[type.Name].IsExtern(Options, out _, out _);
     }
 
     public Constructor/*?*/ GetConstructor(UserDefinedType/*?*/ type) {
       if (type == null || !classes.ContainsKey(type.Name)) {
-        Options.Printer.ErrorWriteLine(Options.ErrorWriter, $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        if (!suppressErrorMessages) {
+          Options.Printer.ErrorWriteLine(Options.ErrorWriter,
+            $"*** Error: Cannot identify type {type?.Name ?? " (null) "}");
+        }
+
         SetNonZeroExitCode = true;
         return null;
       }
@@ -446,7 +484,10 @@ namespace DafnyTestGeneration {
 *** Error: Values of type {newTypeName} 
 will be assigned a default value of type {baseType}, 
 which may not match the associated condition, if any".TrimStart();
-          info.Options.Printer.ErrorWriteLine(info.Options.ErrorWriter, message);
+          if (!info.suppressErrorMessages) {
+            info.Options.Printer.ErrorWriteLine(info.Options.ErrorWriter, message);
+          }
+
           info.SetNonZeroExitCode = true;
         }
         info.subsetToSuperset[newTypeName] = (typeArgs,
@@ -513,6 +554,7 @@ which may not match the associated condition, if any".TrimStart();
       }
 
       private void Visit(MemberDecl d) {
+        info.CheckInlineAttributeValue(d);
         if (d is Method method) {
           Visit(method);
         } else if (d is Function function) {
@@ -520,41 +562,8 @@ which may not match the associated condition, if any".TrimStart();
         }
       }
 
-      private static bool HasAttribute(Declaration d, string attribute) {
-        var curr = d.Attributes;
-        while (curr != null) {
-          if (curr.Name == attribute) {
-            return true;
-          }
-          curr = curr.Prev;
-        }
-        return false;
-      }
-
       private new void Visit(Method m) {
         info.methods[m.FullDafnyName] = m;
-        if (!HasAttribute(m, TestGenerationOptions.TestConstructorAttribute)) {
-          return;
-        }
-        if (m.Ins.Count != 1 && m.Req.Count != 0 && m.IsStatic) {
-          info.SetNonZeroExitCode = true;
-          info.Options.Printer.ErrorWriteLine(Console.Error,
-            $"*** Error: Methods annotated with " +
-            $"{TestGenerationOptions.TestConstructorAttribute} must be " +
-            $"static, have no preconditions, and have a single return " +
-            $"parameter. Method {m.FullDafnyName} violates these conditions.");
-          return;
-        }
-        var returnType = Utils.UseFullName(m.Outs[0].Type).ToString();
-        if (info.userDefinedConstructorForType.ContainsKey(returnType)) {
-          info.SetNonZeroExitCode = true;
-          info.Options.Printer.ErrorWriteLine(Console.Error,
-            $"*** Error: Found two methods annotated with " +
-            $"{TestGenerationOptions.TestConstructorAttribute}. Will use " +
-            $"{info.userDefinedConstructorForType[returnType].FullDafnyName}.");
-          return;
-        }
-        info.userDefinedConstructorForType[returnType] = m;
       }
 
       private new void Visit(Function f) {

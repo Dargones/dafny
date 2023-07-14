@@ -1,5 +1,8 @@
-#nullable disable
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 
+#nullable disable
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Boogie;
@@ -12,7 +15,13 @@ namespace DafnyTestGeneration.Inlining;
 /// <summary> Turns each function into a function-by-method and removes all opaque attributes. </summary>
 public class AddByMethodRewriter : IRewriter {
 
-  protected internal AddByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
+  // determines whether byMethod body should be added to a function
+  private readonly Func<MemberDecl, bool> shouldProcessPredicate;
+
+  protected internal AddByMethodRewriter(ErrorReporter reporter, Func<MemberDecl, bool> shouldProcessPredicate)
+    : base(reporter) {
+    this.shouldProcessPredicate = shouldProcessPredicate;
+  }
 
   internal void PreResolve(Program program) {
     AddByMethod(program.DefaultModule);
@@ -51,12 +60,11 @@ public class AddByMethodRewriter : IRewriter {
   }
 
   private void AddByMethod(Function func) {
-    
+
     func.Attributes = RemoveOpaqueAttr(func.Attributes, new Cloner());
-    if (func.IsGhost || 
-        func.Body == null || 
-        func.ByMethodBody != null || 
-        (!Utils.AttributeFinder.MembersHasAttribute(func, TestGenerationOptions.TestInlineAttribute))) {
+    if (func.IsGhost ||
+        func.Body == null ||
+        func.ByMethodBody != null || !shouldProcessPredicate(func)) {
       return;
     }
 

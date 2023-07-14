@@ -1,5 +1,7 @@
-#nullable disable
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 
+#nullable disable
 using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Dafny;
@@ -8,30 +10,42 @@ using Program = Microsoft.Dafny.Program;
 namespace DafnyTestGeneration.Inlining; 
 
 public static class InliningTranslator {
+  private static bool ShouldProcessForInlining(MemberDecl memberDecl) {
+    return Utils.MembersHasAttribute(memberDecl, TestGenerationOptions.TestEntryAttribute) ||
+           Utils.MembersHasAttribute(memberDecl, TestGenerationOptions.TestInlineAttribute);
+  }
 
   /// <summary>
   /// Take an unresolved <param name="dafnyProgram"></param> and translate it to Boogie while enabling inlining.
+  /// Return false if encountered any errors along the way
   /// </summary>
-  public static Microsoft.Boogie.Program TranslateAndInline(Program dafnyProgram, DafnyOptions options) {
+  public static bool TranslateForFutureInlining(Program dafnyProgram, DafnyOptions options, out Microsoft.Boogie.Program boogieProgram) {
+    boogieProgram = null;
     // Substitute all :testInline-annotated functions with function-by-methods and remove all opaque attributes
-    new AddByMethodRewriter(new ConsoleErrorReporter(options)).PreResolve(dafnyProgram);
+    new AddByMethodRewriter(new ConsoleErrorReporter(options), ShouldProcessForInlining).PreResolve(dafnyProgram);
     // Remove short-circuiting expressions from method and byMethod bodies
-    new RemoveShortCircuitingCloner().Visit(dafnyProgram);
+    new RemoveShortCircuitingRewriter(ShouldProcessForInlining).PreResolve(dafnyProgram);
     // Resolve the program (in particular, resolve all function calls)
-    new Resolver(dafnyProgram).ResolveProgram(dafnyProgram, CancellationToken.None); // now resolved
+    new ProgramResolver(dafnyProgram).Resolve(CancellationToken.None); // now resolved
+    if (dafnyProgram.Reporter.HasErrors) {
+      return false;
+    }
     // Change by-method function calls to method calls
-    new FunctionCallToMethodCallCloner().Visit(dafnyProgram);
+    new FunctionCallToMethodCallRewriter(ShouldProcessForInlining).PostResolve(dafnyProgram);
     // Separate by-method methods into standalone methods so that translator adds Call$$ procedures for them
-    new SeparateByMethodRewriter(new ConsoleErrorReporter(options)).PostResolve(dafnyProgram);
+    new SeparateByMethodRewriter(new ConsoleErrorReporter(options), ShouldProcessForInlining).PostResolve(dafnyProgram);
     // Translate Dafny to Boogie. 
     var boogiePrograms = Utils.Translate(dafnyProgram);
+    if (dafnyProgram.Reporter.HasErrors) {
+      return false;
+    }
     // If translation returns several modules, merge them all together to enable inlining across modules
-    var program = MergeBoogiePrograms(boogiePrograms);
+    boogieProgram = MergeBoogiePrograms(boogiePrograms);
     // Finally, create bodies for the Call$$ procedures that call out to Impl$$ procedures
-    program = new AddImplementationsForCallsRewriter(options).VisitProgram(program);
-    return program;
+    boogieProgram = new AddImplementationsForCallsRewriter(options).VisitProgram(boogieProgram);
+    return true;
   }
-  
+
   /// <summary>
   /// Merge Boogie Programs by removing any duplicate top level declarations
   /// </summary>
@@ -60,5 +74,5 @@ public static class InliningTranslator {
     toRemove.ForEach(x => program.RemoveTopLevelDeclaration(x));
     return program;
   }
-  
+
 }

@@ -1,3 +1,6 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
 using System;
 using System.Collections.Generic;
@@ -11,7 +14,7 @@ namespace DafnyTestGeneration {
 
   public static class Main {
 
-    public static bool setNonZeroExitCode = false;
+    public static bool SetNonZeroExitCode = false;
 
     /// <summary>
     /// This method returns each capturedState that is unreachable, one by one,
@@ -70,24 +73,23 @@ namespace DafnyTestGeneration {
 
     private static IEnumerable<ProgramModification> GetModifications(Modifications cache, Program program) {
       var options = program.Options;
-      var boogieProgram = Inlining.InliningTranslator.TranslateAndInline(program, options);
-      var dafnyInfo = new DafnyInfo(program);
-      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
-      if (options.TestGenOptions.TargetMethod != null) {
-        var targetFound = boogieProgram.Implementations.Any(i =>
-            i.Name.StartsWith("Impl$$") &&
-            i.VerboseName.Split(" ")[0]
-            == options.TestGenOptions.TargetMethod);
-        if (!targetFound) {
-          options.Printer.ErrorWriteLine(options.ErrorWriter,
-            "Error: Cannot find method " +
-            options.TestGenOptions.TargetMethod +
-            " (is this name fully-qualified?)");
-          setNonZeroExitCode = true;
-          return new List<ProgramModification>();
-        }
+      var success = Inlining.InliningTranslator.TranslateForFutureInlining(program, options, out var boogieProgram);
+      if (!success) {
+        options.Printer.ErrorWriteLine(options.ErrorWriter,
+          $"Error: Failed at resolving or translating the inlined Dafny code.");
+        SetNonZeroExitCode = true;
+        return new List<ProgramModification>();
       }
-
+      var dafnyInfo = new DafnyInfo(program);
+      SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
+      if (!Utils.ProgramHasAttribute(program,
+            TestGenerationOptions.TestEntryAttribute)) {
+        options.Printer.ErrorWriteLine(options.ErrorWriter,
+          $"Error: Found no methods or functions annotated with {TestGenerationOptions.TestEntryAttribute}. " +
+          $"Please annotate all entry points for testing with this attribute.");
+        SetNonZeroExitCode = true;
+        return new List<ProgramModification>();
+      }
       // Create modifications of the program with assertions for each block\path
       ProgramModifier programModifier =
         options.TestGenOptions.Mode == TestGenerationOptions.Modes.Path
@@ -100,7 +102,7 @@ namespace DafnyTestGeneration {
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache=null) {
+    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache = null) {
 
       var options = program.Options;
       options.PrintMode = PrintModes.Everything;
@@ -108,8 +110,9 @@ namespace DafnyTestGeneration {
 
       cache ??= new Modifications(options);
       var programModifications = GetModifications(cache, program).ToList();
-      var dafnyInfo = new DafnyInfo(program);
-      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
+      // Suppressing error messages which will be printed when dafnyInfo is initialized again in GetModifications
+      var dafnyInfo = new DafnyInfo(program, true);
+      SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
       foreach (var modification in programModifications) {
 
         var log = await modification.GetCounterExampleLog(cache);
@@ -122,7 +125,7 @@ namespace DafnyTestGeneration {
         }
         yield return testMethod;
       }
-      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
+      SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
     }
 
     /// <summary>
@@ -137,13 +140,14 @@ namespace DafnyTestGeneration {
       if (program == null) {
         yield break;
       }
-      if (Utils.AttributeFinder.ProgramHasAttribute(program,
+      if (Utils.ProgramHasAttribute(program,
             TestGenerationOptions.TestInlineAttribute)) {
         options.VerifyAllModules = true;
       }
-      var dafnyInfo = new DafnyInfo(program);
+      // Suppressing error messages which will be printed when dafnyInfo is initialized again in GetModifications
+      var dafnyInfo = new DafnyInfo(program, true);
       program = Utils.Parse(options, source, false, uri);
-      setNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || setNonZeroExitCode;
+      SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
       var rawName = Regex.Replace(sourceFile, "[^a-zA-Z0-9_]", "");
 
       string EscapeDafnyStringLiteral(string str) {
@@ -159,16 +163,16 @@ namespace DafnyTestGeneration {
           yield return $"import {dafnyInfo.ToImportAs[module]} = {module}";
         }
       }
-      
+
       var cache = new Modifications(options);
       var methodsGenerated = 0;
       await foreach (var method in GetTestMethodsForProgram(program, cache)) {
         yield return method.ToString();
         methodsGenerated++;
       }
-      
+
       foreach (var implementation in cache.Values
-                 .Select(modification => modification.implementation).ToHashSet()) {
+                 .Select(modification => modification.Implementation).ToHashSet()) {
         int failedQueries = cache.ModificationsWithStatus(implementation,
           ProgramModification.Status.Failure);
         int queries = failedQueries + cache.ModificationsWithStatus(implementation,
@@ -194,7 +198,7 @@ namespace DafnyTestGeneration {
         options.Printer.ErrorWriteLine(options.ErrorWriter,
           "Error: No tests were generated, because no code points could be " +
           "proven reachable (do you have a false assumption in the program?)");
-        setNonZeroExitCode = true;
+        SetNonZeroExitCode = true;
       }
     }
   }

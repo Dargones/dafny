@@ -99,6 +99,10 @@ Usage: dafny [ option ... ] [ filename ... ]
   
   ---- Language feature selection --------------------------------------------
   
+  /generalTraits:<value>
+      0 (default) - Every trait implicitly extends 'object', and thus is a reference type. Only traits and classes can extend traits.
+      1 - A trait is a reference type iff it or one of its ancestor traits is 'object'. Any type with members can extend traits.
+
   /ntitrace:<value>
       0 (default) - Don't print debug information for the new type system.
       1 - Print debug information for the new type system.
@@ -336,8 +340,6 @@ Usage: dafny [ option ... ] [ filename ... ]
   /generateTestSeqLengthLimit:<n>
       Add an axiom that sets the length of all sequences to be no greater 
       than <n>. 0 (default) indicates no limit.
-  /generateTestTargetMethod:<methodName>
-      If specified, only this method will be tested.
   /generateTestPrintBpl:<fileName>
       Print the Boogie code used during test generation.
   /generateTestNoPrune

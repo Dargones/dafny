@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Program = Microsoft.Dafny.Program;
 
@@ -98,11 +99,16 @@ namespace DafnyTestGeneration {
       return programModifier.GetModifications(boogieProgram, dafnyInfo);
     }
 
+    enum Coverage {
+      COVERED, UNCOVERED, PARTIAL, UNKNOWN
+    }
+
     /// <summary>
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache = null) {
+    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program,
+      Modifications cache = null) {
 
       var options = program.Options;
       options.PrintMode = PrintModes.Everything;
@@ -119,12 +125,15 @@ namespace DafnyTestGeneration {
         if (log == null) {
           continue;
         }
+
         var testMethod = await modification.GetTestMethod(cache, dafnyInfo);
         if (testMethod == null) {
           continue;
         }
+
         yield return testMethod;
       }
+
       SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
     }
 
@@ -171,6 +180,56 @@ namespace DafnyTestGeneration {
         methodsGenerated++;
       }
 
+      Dictionary<int, Coverage> coverage = new();
+      HashSet<string> allStates = new();
+      HashSet<string> capturedStates = new();
+      foreach (var modification in cache.Values) {
+        foreach (var state in modification.CapturedStates) {
+          allStates.Add(state);
+          if (modification.CounterexampleStatus == ProgramModification.Status.Success) {
+            capturedStates.Add(state);
+          }
+        }
+      }
+
+      var lineRegex = new Regex("\\(([0-9]+),[0-9]+\\)");
+      foreach (var state in allStates) {
+        var match = lineRegex.Match(state);
+        if (!match.Success) {
+          continue;
+        }
+        int linenum = int.Parse(match.Groups[1].Value);
+        bool captured = capturedStates.Contains(state);
+        if (captured && !coverage.ContainsKey(linenum)) {
+          coverage[linenum] = Coverage.COVERED;
+        }
+        if (captured && coverage.ContainsKey(linenum) && coverage[linenum] == Coverage.UNCOVERED) {
+          coverage[linenum] = Coverage.PARTIAL;
+        }
+        if (!captured && !coverage.ContainsKey(linenum)) {
+          coverage[linenum] = Coverage.UNCOVERED;
+        }
+        if (!captured && coverage.ContainsKey(linenum) && coverage[linenum] == Coverage.COVERED) {
+          coverage[linenum] = Coverage.PARTIAL;
+        }
+      }
+      
+      var lines = source.Split("\n");
+      for (int i = 0; i < lines.Length; i++) {
+        switch (coverage.GetOrDefault(i+1, () => Coverage.UNKNOWN)) {
+          case Coverage.COVERED:
+            lines[i] = $"<span class=\"fc\" id=\"L{i}\">" + lines[i] + "</span>";
+            break;
+          case Coverage.PARTIAL:
+            lines[i] = $"<span class=\"pc\" id=\"L{i}\">" + lines[i] + "</span>";
+            break;
+          case Coverage.UNCOVERED:
+            lines[i] = $"<span class=\"nc\" id=\"L{i}\">" + lines[i] + "</span>";
+            break;
+        }
+      }
+      File.WriteAllText("coverage.html", string.Join("\n", lines));
+
       foreach (var implementation in cache.Values
                  .Select(modification => modification.Implementation).ToHashSet()) {
         int failedQueries = cache.ModificationsWithStatus(implementation,
@@ -185,10 +244,10 @@ namespace DafnyTestGeneration {
                      $"{coveredByTests} should be covered by tests " +
                      $"(assuming no tests were found to be duplicates of each other). " +
                      $"Moreover, {coveredByCounterexamples} locations have been found to be reachable " +
-                     $"(i.e. the verifier returned a counterexample and did not timeout). " +
+                     $"(i.e. the verifier did not timeout and produced example inputs to reach these locations). " +
                      $"A total of {queries} SMT queries were made to cover " +
                      $"this method or the method into which this method was inlined. " +
-                     $"{failedQueries} queries did not return a counterexample.";
+                     $"{failedQueries} queries timed out or identified potential dead code.";
       }
 
       yield return TestMethod.EmitSynthesizeMethods(dafnyInfo);

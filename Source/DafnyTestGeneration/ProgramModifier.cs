@@ -36,8 +36,7 @@ namespace DafnyTestGeneration {
       DafnyInfo dafnyInfo) {
       DafnyInfo = dafnyInfo;
       var options = dafnyInfo.Options;
-      var engine = ExecutionEngine.CreateWithoutSharedCache(options);
-      engine.CoalesceBlocks(program); // removes redundant basic blocks
+      BlockCoalescer.CoalesceBlocks(program);
       program = new AnnotationVisitor().VisitProgram(program);
       AddAxioms(options, program);
       program.Resolve(options);
@@ -85,7 +84,7 @@ namespace DafnyTestGeneration {
       string separator = " | ") {
       // first insert separators between the things being printed
       var toPrint = new List<object>();
-      data.Iter(obj => toPrint.AddRange(new List<object> { obj, separator }));
+      data.ForEach(obj => toPrint.AddRange(new List<object> { obj, separator }));
       if (toPrint.Count() != 0) {
         toPrint.RemoveAt(toPrint.Count() - 1);
       }

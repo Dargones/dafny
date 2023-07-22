@@ -130,31 +130,37 @@ namespace DafnyTestGeneration {
       }
       var options = GenerateTestsCommand.CopyForProcedure(Options, testEntryNames);
       SetupForCounterexamples(options);
-      var engine = ExecutionEngine.CreateWithoutSharedCache(options);
-      var guid = Guid.NewGuid().ToString();
-      program.Resolve(options);
-      program.Typecheck(options);
-      engine.EliminateDeadVariables(program);
-      engine.CollectModSets(program);
-      engine.Inline(program);
-      program.RemoveTopLevelDeclarations(declaration => declaration is Microsoft.Boogie.Implementation or Procedure && Utils.DeclarationHasAttribute(declaration, "inline"));
       var writer = new StringWriter();
-      var result = await Task.WhenAny(engine.InferAndVerify(writer, program,
+      using (var engine = ExecutionEngine.CreateWithoutSharedCache(options)) {
+        var guid = Guid.NewGuid().ToString();
+        program.Resolve(options);
+        program.Typecheck(options);
+        engine.EliminateDeadVariables(program);
+        engine.CollectModSets(program);
+        engine.Inline(program);
+        program.RemoveTopLevelDeclarations(declaration =>
+          declaration is Microsoft.Boogie.Implementation or Procedure &&
+          Utils.DeclarationHasAttribute(declaration, "inline"));
+        var result = await Task.WhenAny(engine.InferAndVerify(writer, program,
             new PipelineStatistics(), null,
             _ => { }, guid),
-          Task.Delay(TimeSpan.FromSeconds(Options.TimeLimit <= 0 ?
-            TestGenerationOptions.DefaultTimeLimit : Options.TimeLimit)));
-      program = null; // allows to garbage collect what is no longer needed
-      CounterexampleStatus = Status.Failure;
-      counterexampleLog = null;
-      if (result is not Task<PipelineOutcome>) {
-        if (Options.Verbose) {
-          await options.OutputWriter.WriteLineAsync(
-            $"// No test can be generated for {uniqueId} " +
-            "because the verifier timed out.");
+          Task.Delay(TimeSpan.FromSeconds(Options.TimeLimit <= 0
+            ? TestGenerationOptions.DefaultTimeLimit
+            : Options.TimeLimit)));
+        program = null; // allows to garbage collect what is no longer needed
+        CounterexampleStatus = Status.Failure;
+        counterexampleLog = null;
+        if (result is not Task<PipelineOutcome>) {
+          if (Options.Verbose) {
+            await options.OutputWriter.WriteLineAsync(
+              $"// No test can be generated for {uniqueId} " +
+              "because the verifier timed out.");
+          }
+
+          return counterexampleLog;
         }
-        return counterexampleLog;
       }
+
       var log = writer.ToString();
       // If Dafny finds several assertion violations (e.g. because of inlining one trap assertion multiple times),
       // pick the first execution trace and extract the counterexample from it
@@ -189,7 +195,7 @@ namespace DafnyTestGeneration {
           await options.OutputWriter.WriteLineAsync(
             $"// No test is generated for {uniqueId} " +
             "because there is no enhanced error trace. This can be caused " +
-            "by a bug in boogie counterexample model parsing.");
+            "by a bug in Boogie error reporting.");
         } else {
           await options.OutputWriter.WriteLineAsync(
             $"// No test is generated for {uniqueId} " +
@@ -202,7 +208,7 @@ namespace DafnyTestGeneration {
     public async Task<TestMethod> GetTestMethod(Modifications cache, DafnyInfo dafnyInfo, bool returnNullIfNotUnique = true) {
       if (Options.Verbose) {
         await dafnyInfo.Options.OutputWriter.WriteLineAsync(
-          $"// Extracting the test for {uniqueId} from the counterexample...");
+          $"// Constructing the test for {uniqueId}...");
       }
       var log = await GetCounterExampleLog(cache);
       if (log == null) {
@@ -222,7 +228,8 @@ namespace DafnyTestGeneration {
         await dafnyInfo.Options.OutputWriter.WriteLineAsync(
           $"// Test for {uniqueId} matches a test previously generated " +
           $"for {duplicate.uniqueId} - this may occur if the code under test is non-deterministic, " +
-          $"if a method/function is not inlined, or if test generation cannot extract a value from a counterexample.");
+          $"if a method/function is not inlined, or the input parameters are of a type not supported by " +
+          $"test generation (trait types and function types).");
       }
       return null;
     }

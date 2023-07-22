@@ -244,7 +244,7 @@ namespace Microsoft.Dafny {
     ///     // so "h" and $IsHeap(h) are omitted.
     ///     axiom fh < FunctionContextHeight ==>
     ///       (forall o: ref, h: Heap, G : Ty ::
-    ///         { h[o, f], TClassA(G) }  // if "f" is a const, omit TClassA(G) from the trigger and just use { f(G,o) }
+    ///         { h[o, f], TClassA(G) }
     ///         $IsHeap(h) &&
     ///         o != null && $Is(o, TClassA(G))  // or dtype(o) = TClassA(G)
     ///         ==>
@@ -254,7 +254,7 @@ namespace Microsoft.Dafny {
     ///     // As above for "G" and "ii", but "h" is included no matter what.
     ///     axiom fh < FunctionContextHeight ==>
     ///       (forall o: ref, h: Heap, G : Ty ::
-    ///         { h[o, f], TClassA(G) }  // if "f" is a const, use the trigger { f(G,o), h[o, alloc] }; for other readonly fields, use { f(o), h[o, alloc], TClassA(G) }
+    ///         { h[o, f], TClassA(G) }
     ///         $IsHeap(h) &&
     ///         o != null && $Is(o, TClassA(G)) &&  // or dtype(o) = TClassA(G)
     ///         h[o, alloc]
@@ -275,20 +275,21 @@ namespace Microsoft.Dafny {
       var hVar = BplBoundVar("$h", predef.HeapType, out var h);
       var oVar = BplBoundVar("$o", TrType(ModuleResolver.GetThisType(c.tok, c)), out var o);
 
-      // TClassA(G)
-      Bpl.Expr o_ty = ClassTyCon(c, tyexprs);
-
+      Bpl.Expr o_ty; // to hold TClassA(G)
       var isGoodHeap = FunctionCall(c.tok, BuiltinFunction.IsGoodHeap, null, h);
       Bpl.Expr isalloc_o;
-      if (c is (not ClassLikeDecl) or TraitDecl { IsReferenceTypeDecl: false }) {
+      if (c is not ClassLikeDecl { IsReferenceTypeDecl: true }) {
         var udt = UserDefinedType.FromTopLevelDecl(c.tok, c);
+        o_ty = ClassTyCon(c, tyexprs);
         isalloc_o = MkIsAlloc(o, udt, h);
       } else if (RevealedInScope(c)) {
+        o_ty = ClassTyCon(c, tyexprs);
         isalloc_o = IsAlloced(c.tok, h, o);
       } else {
         // c is only provided, not revealed, in the scope. Use the non-null type decl's internal synonym
-        var cl = (ClassDecl)c;
+        var cl = (ClassLikeDecl)c;
         Contract.Assert(cl.NonNullTypeDecl != null);
+        o_ty = ClassTyCon(cl.NonNullTypeDecl, tyexprs);
         var udt = UserDefinedType.FromTopLevelDecl(c.tok, cl.NonNullTypeDecl);
         isalloc_o = MkIsAlloc(o, udt, h);
       }
@@ -349,7 +350,9 @@ namespace Microsoft.Dafny {
 
       Bpl.Expr is_o = BplAnd(
         ReceiverNotNull(o),
-        !o.Type.Equals(predef.RefType) || c is TraitDecl ? MkIs(o, UserDefinedType.FromTopLevelDecl(c.tok, c)) : DType(o, o_ty)); // $Is(o, ..)  or  dtype(o) == o_ty
+        !o.Type.Equals(predef.RefType) || c is TraitDecl
+          ? MkIs(o, o_ty, ModeledAsBoxType(ModuleResolver.GetThisType(c.tok, c))) // $Is(o, ..)
+          : DType(o, o_ty)); // dtype(o) == o_ty
       ante = BplAnd(ante, is_o);
 
       ante = BplAnd(ante, indexBounds);
@@ -649,16 +652,16 @@ namespace Microsoft.Dafny {
         builder.Add(Boogie.Cmd.SimpleAssign(m.tok, new Boogie.IdentifierExpr(m.tok, "$_reverifyPost", Boogie.Type.Bool), Boogie.Expr.False));
         // register output parameters with definite-assignment trackers
         Contract.Assert(definiteAssignmentTrackers.Count == 0);
-        m.Outs.Iter(p => AddExistingDefiniteAssignmentTracker(p, m.IsGhost));
+        m.Outs.ForEach(p => AddExistingDefiniteAssignmentTracker(p, m.IsGhost));
         // translate the body
         TrStmt(m.Body, builder, localVariables, etran);
-        m.Outs.Iter(p => CheckDefiniteAssignmentReturn(m.Body.RangeToken.EndToken, p, builder));
+        m.Outs.ForEach(p => CheckDefiniteAssignmentReturn(m.Body.RangeToken.EndToken, p, builder));
         if (m is { FunctionFromWhichThisIsByMethodDecl: { ByMethodTok: { } } fun }) {
           AssumeCanCallForByMethodDecl(m, builder);
         }
         stmts = builder.Collect(m.Body.RangeToken.StartToken); // TODO should this be EndToken?  the parameter name suggests it should be the closing curly
         // tear down definite-assignment trackers
-        m.Outs.Iter(RemoveDefiniteAssignmentTracker);
+        m.Outs.ForEach(RemoveDefiniteAssignmentTracker);
 
         Contract.Assert(definiteAssignmentTrackers.Count == 0);
       } else {
@@ -1055,6 +1058,7 @@ namespace Microsoft.Dafny {
 
       var moreArgsCF = new List<Boogie.Expr>();
       Expr layer = null;
+      Expr reveal = null;
 
       // Add the fuel argument
       if (f.IsFuelAware()) {
@@ -1067,6 +1071,18 @@ namespace Microsoft.Dafny {
         // We can't use a bound variable $fuel, because then one of the triggers won't be mentioning this $fuel.
         // Instead, we do the next best thing: use the literal $LZ.
         layer = new Boogie.IdentifierExpr(f.tok, "$LZ", predef.LayerType); // $LZ
+      }
+
+      if (f.IsOpaque) {
+        Contract.Assert(overridingFunction.IsOpaque);
+        var revealVar = new Boogie.BoundVariable(f.tok, new Boogie.TypedIdent(f.tok, "reveal", Boogie.Type.Bool));
+        forallFormals.Add(revealVar);
+        reveal = new Boogie.IdentifierExpr(f.tok, revealVar);
+        argsJF.Add(reveal);
+      } else if (overridingFunction.IsOpaque) {
+        // We can't use a bound variable $fuel, because then one of the triggers won't be mentioning this $fuel.
+        // Instead, we do the next best thing: use the literal false.
+        reveal = new Boogie.LiteralExpr(f.tok, false);
       }
 
       // Add heap arguments
@@ -1122,6 +1138,10 @@ namespace Microsoft.Dafny {
 
       if (layer != null) {
         argsCF.Add(layer);
+      }
+
+      if (reveal != null) {
+        argsCF.Add(reveal);
       }
 
       argsCF = Concat(argsCF, moreArgsCF);

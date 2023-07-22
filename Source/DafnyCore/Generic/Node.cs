@@ -328,7 +328,7 @@ public abstract class TokenNode : Node {
           }
         }
 
-        Children.Iter(UpdateStartEndTokRecursive);
+        PreResolveChildren.ForEach(UpdateStartEndTokRecursive);
 
         if (FormatTokens != null) {
           foreach (var token in FormatTokens) {

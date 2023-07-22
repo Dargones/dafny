@@ -41,6 +41,12 @@ namespace DafnyTestGeneration {
       AddAxioms(options, program);
       program.Resolve(options);
       program.Typecheck(options);
+      using (var engine = ExecutionEngine.CreateWithoutSharedCache(options)) {
+        engine.EliminateDeadVariables(program);
+        engine.CollectModSets(program);
+        engine.Inline(program);
+      }
+      program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && Utils.DeclarationHasAttribute(declaration, "inline"));
       program = new RemoveChecks(options).VisitProgram(program);
       TestEntries = program.Implementations
         .Where(implementation =>
@@ -56,8 +62,7 @@ namespace DafnyTestGeneration {
     protected abstract IEnumerable<ProgramModification> GetModifications(Program p);
 
     protected bool ImplementationIsToBeTested(Implementation impl) =>
-      (Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestEntryAttribute) ||
-       Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestInlineAttribute)) &&
+      Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestEntryAttribute) &&
       impl.Name.StartsWith(ImplPrefix) && !impl.Name.EndsWith(CtorPostfix);
 
     /// <summary>

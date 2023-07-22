@@ -30,6 +30,13 @@ namespace DafnyTestGeneration {
       }
       return idToModification[uniqueId];
     }
+    
+    public ProgramModification GetProgramModification(string uniqueId) {
+      if (!idToModification.ContainsKey(uniqueId)) {
+        return null;
+      }
+      return idToModification[uniqueId];
+    }
 
     public IEnumerable<ProgramModification> Values => idToModification.Values;
 
@@ -135,12 +142,6 @@ namespace DafnyTestGeneration {
         var guid = Guid.NewGuid().ToString();
         program.Resolve(options);
         program.Typecheck(options);
-        engine.EliminateDeadVariables(program);
-        engine.CollectModSets(program);
-        engine.Inline(program);
-        program.RemoveTopLevelDeclarations(declaration =>
-          declaration is Microsoft.Boogie.Implementation or Procedure &&
-          Utils.DeclarationHasAttribute(declaration, "inline"));
         var result = await Task.WhenAny(engine.InferAndVerify(writer, program,
             new PipelineStatistics(), null,
             _ => { }, guid),

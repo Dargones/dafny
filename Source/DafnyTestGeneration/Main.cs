@@ -28,7 +28,7 @@ namespace DafnyTestGeneration {
       program.Reporter.Options.PrintMode = PrintModes.Everything;
 
       var cache = new Modifications(program.Options);
-      var modifications = GetModifications(cache, program).ToList();
+      var modifications = GetModifications(cache, program, out _).ToList();
       var blocksReached = modifications.Count;
       HashSet<string> allStates = new();
       HashSet<string> allDeadStates = new();
@@ -71,16 +71,17 @@ namespace DafnyTestGeneration {
       }
     }
 
-    private static IEnumerable<ProgramModification> GetModifications(Modifications cache, Program program) {
+    private static IEnumerable<ProgramModification> GetModifications(Modifications cache, Program program, out DafnyInfo dafnyInfo) {
       var options = program.Options;
       var success = Inlining.InliningTranslator.TranslateForFutureInlining(program, options, out var boogieProgram);
+      dafnyInfo = null;
       if (!success) {
         options.Printer.ErrorWriteLine(options.ErrorWriter,
           $"Error: Failed at resolving or translating the inlined Dafny code.");
         SetNonZeroExitCode = true;
         return new List<ProgramModification>();
       }
-      var dafnyInfo = new DafnyInfo(program);
+      dafnyInfo = new DafnyInfo(program);
       SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
       if (!Utils.ProgramHasAttribute(program,
             TestGenerationOptions.TestEntryAttribute)) {
@@ -109,11 +110,7 @@ namespace DafnyTestGeneration {
       // Generate tests based on counterexamples produced from modifications
 
       cache ??= new Modifications(options);
-      var programModifications = GetModifications(cache, program).ToList();
-      // Suppressing error messages which will be printed when dafnyInfo is initialized again in GetModifications
-      var dafnyInfo = new DafnyInfo(program, true);
-      SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
-      foreach (var modification in programModifications) {
+      foreach (var modification in GetModifications(cache, program, out var dafnyInfo)) {
 
         var log = await modification.GetCounterExampleLog(cache);
         if (log == null) {
@@ -125,7 +122,6 @@ namespace DafnyTestGeneration {
         }
         yield return testMethod;
       }
-      SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
     }
 
     /// <summary>

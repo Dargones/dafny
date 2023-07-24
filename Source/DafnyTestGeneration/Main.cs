@@ -144,7 +144,7 @@ namespace DafnyTestGeneration {
         }
       }
       new CoverageReporter(program.Reporter)
-        .GenerateCoverageReportFiles(new() { coverageReport, new CoverageReport(program, "C# Runtime Coverage", "Lines"), new CoverageReport(program, "Java Runtime Coverage", "Lines") }, options.TestGenOptions.PrintCoverage);
+        .GenerateCoverageReportFiles(new() { coverageReport}, options.TestGenOptions.PrintCoverage);
     }
 
     /// <summary>

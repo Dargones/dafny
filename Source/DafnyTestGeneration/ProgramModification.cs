@@ -30,7 +30,7 @@ namespace DafnyTestGeneration {
       }
       return idToModification[uniqueId];
     }
-    
+
     public ProgramModification GetProgramModification(string uniqueId) {
       if (!idToModification.ContainsKey(uniqueId)) {
         return null;

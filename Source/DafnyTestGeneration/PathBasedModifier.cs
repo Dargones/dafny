@@ -99,14 +99,14 @@ namespace DafnyTestGeneration {
     private IEnumerable<Path> GeneratePaths(Implementation impl, int minPathLength, int maxPathLength) {
       List<Block> currPath = new(); // list of basic blocks along the current path
       // remember alternative paths that could have been taken at every goto: 
-      List<List<Block>> otherGotos = new() {new() };
+      List<List<Block>> otherGotos = new() { new() };
       // set of boolean variables indicating that blocks in currPath list have been visited:
-      HashSet<Variable> currPathVariables = new(); 
+      HashSet<Variable> currPathVariables = new();
       var blockToVariable = InitBlockVars(impl);
       var block = impl.Blocks[0];
       while (block != null) {
         if ((block.TransferCmd is ReturnCmd && currPath.Count >= minPathLength) || currPath.Count == maxPathLength - 1) {
-          yield return new Path(impl, currPathVariables.ToList(), new(){block},
+          yield return new Path(impl, currPathVariables.ToList(), new() { block },
             currPath.Append(block).ToList());
         } else {
           if (currPath.Count != 0 && ((GotoCmd)currPath.Last().TransferCmd).labelTargets.Count != 1) {
@@ -117,7 +117,7 @@ namespace DafnyTestGeneration {
           var gotoCmd = block.TransferCmd as GotoCmd;
           foreach (var nextBlock in gotoCmd?.labelTargets ?? new List<Block>()) {
             if (currPathVariables.Contains(blockToVariable[nextBlock])) { // this prevents cycles
-              continue; 
+              continue;
             }
             otherGotos.Last().Add(nextBlock);
           }
@@ -143,7 +143,7 @@ namespace DafnyTestGeneration {
     }
 
     private class Path {
-      
+
       public readonly Implementation Impl;
       private readonly List<Variable> path; // flags for the blocks along the path
       private readonly List<Block> returnBlocks; // block(s) where the path ends
@@ -157,7 +157,7 @@ namespace DafnyTestGeneration {
         this.pathBlocks = pathBlocks;
       }
 
-      public string FirstNBlocksAsString(int n=-1) {
+      public string FirstNBlocksAsString(int n = -1) {
         if (n == -1) {
           return $"path through {string.Join(",", pathBlocks.ConvertAll(Utils.GetBlockId).Where(id => id != null))}";
         }
@@ -177,7 +177,7 @@ namespace DafnyTestGeneration {
               ConstructDisjunction(clauses.GetRange(0, mid)),
               ConstructDisjunction(clauses.GetRange(mid, clauses.Count - mid))
             });
-        } 
+        }
         if (clauses.Count == 1) {
           return clauses[0];
         }

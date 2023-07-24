@@ -9,7 +9,7 @@ namespace Microsoft.Dafny {
     public static readonly string TestInlineAttribute = "testInline";
     public static readonly string TestEntryAttribute = "testEntry";
     public bool WarnDeadCode = false;
-    public enum Modes { None, Block, Path };
+    public enum Modes { None, Block, Path, Branch };
     public Modes Mode = Modes.None;
     public uint SeqLengthLimit = 0;
     [CanBeNull] public string PrintBpl = null;
@@ -33,6 +33,7 @@ namespace Microsoft.Dafny {
               "None" => Modes.None,
               "Block" => Modes.Block,
               "Path" => Modes.Path,
+              "Branch" => Modes.Branch,
               _ => throw new Exception("Invalid value for generateTestMode")
             };
           }
@@ -62,9 +63,10 @@ namespace Microsoft.Dafny {
     public string Help => @"
 /warnDeadCode
     Use counterexample generation to warn about potential dead code.
-/generateTestMode:<None|Block|Path>
+/generateTestMode:<None|Block|Branch|Path>
     None (default) - Has no effect.
     Block - Prints block-coverage tests for the given program.
+    Branch - Prints branch-coverage tests for the given program.
     Path - Prints path-coverage tests for the given program.
     Using /definiteAssignment:3, /generateTestNoPrune, 
     /generateTestSeqLengthLimit, and /loopUnroll is highly recommended

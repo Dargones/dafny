@@ -37,7 +37,16 @@ namespace DafnyTestGeneration {
       DafnyInfo = dafnyInfo;
       var options = dafnyInfo.Options;
       BlockCoalescer.CoalesceBlocks(program);
-      program = new AnnotationVisitor().VisitProgram(program);
+      foreach (var implementation in program.Implementations.Where(i => Utils.DeclarationHasAttribute(i, TestGenerationOptions.TestInlineAttribute))) {
+        var depthExpression = Utils.GetAttributeValue(implementation, TestGenerationOptions.TestInlineAttribute).First();
+        var attribute = new QKeyValue(new Token(), "inline",
+          new List<object>() { depthExpression }, null);
+        attribute.Next = implementation.Attributes;
+        implementation.Attributes = attribute;
+      }
+      if (options.TestGenOptions.Mode is TestGenerationOptions.Modes.Block or TestGenerationOptions.Modes.Path) {
+        program = new AnnotationVisitor().VisitProgram(program);
+      }
       AddAxioms(options, program);
       program.Resolve(options);
       program.Typecheck(options);
@@ -48,6 +57,9 @@ namespace DafnyTestGeneration {
       }
       program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && Utils.DeclarationHasAttribute(declaration, "inline"));
       program = new RemoveChecks(options).VisitProgram(program);
+      if (options.TestGenOptions.Mode is TestGenerationOptions.Modes.Branch) {
+        program = new AnnotationVisitor().VisitProgram(program);
+      }
       TestEntries = program.Implementations
         .Where(implementation =>
           Utils.DeclarationHasAttribute(implementation, TestGenerationOptions.TestEntryAttribute) &&
@@ -155,15 +167,7 @@ namespace DafnyTestGeneration {
         data = new List<object> { "Impl", node.VerboseName.Split(" ")[0] };
         data.AddRange(node.InParams.Select(var => new IdentifierExpr(new Token(), var)));
         node.Blocks[0].cmds.Insert(0, GetAssumePrintCmd(data));
-        if (Utils.DeclarationHasAttribute(node, TestGenerationOptions.TestInlineAttribute)) {
-          // This method is inlined (and hence tested)
-          var depthExpression = Utils.GetAttributeValue(node, TestGenerationOptions.TestInlineAttribute).First();
-          var attribute = new QKeyValue(new Token(), "inline",
-            new List<object>() { depthExpression }, null);
-          attribute.Next = node.Attributes;
-          node.Attributes = attribute;
-          VisitBlockList(node.Blocks);
-        } else if (Utils.DeclarationHasAttribute(node, TestGenerationOptions.TestEntryAttribute)) {
+        if (Utils.DeclarationHasAttribute(node, TestGenerationOptions.TestEntryAttribute) || Utils.DeclarationHasAttribute(node, TestGenerationOptions.TestInlineAttribute)) {
           VisitBlockList(node.Blocks);
         }
         return node;

@@ -137,7 +137,7 @@ namespace DafnyTestGeneration {
                  cmd.Attributes.Params != null &&
                  cmd.Attributes.Params.Count() == 1)
         ?.Attributes.Params[0].ToString();
-      return state == null ? null : Regex.Replace(state, @"\s+", "");
+      return state == null ? null : Regex.Replace(state, @"\s+", "") + "#"+block.UniqueId;
     }
 
     public static IList<object> GetAttributeValue(Implementation implementation, string attribute) {

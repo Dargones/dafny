@@ -9,7 +9,7 @@ using Microsoft.Dafny;
 namespace DafnyCore.CoverageReporter; 
 
 public class CoverageReporter {
-  
+
   private static readonly Regex LabeledCodeRegex = new(@"\{\{LABELED_CODE\}\}\r?\n");
   private static readonly Regex PathToRootRegex = new(@"\{\{PATH_TO_ROOT\}\}");
   private static readonly Regex FileNameRegex = new(@"\{\{FILENAME\}\}");
@@ -21,7 +21,7 @@ public class CoverageReporter {
   private const string CoverageReportTemplatePath = "coverage_report_template.html";
   private const string CoverageReportIndexTemplatePath = "coverage_report_index_template.html";
   private const string CoverageReportSupportingFilesPath = ".resources";
-  
+
   private readonly ErrorReporter reporter;
 
   public CoverageReporter(ErrorReporter reporter) {
@@ -87,11 +87,13 @@ public class CoverageReporter {
         "Embedded HTML template for coverage report index file not found. Index file will not be created.");
       return;
     }
-    List<object> header= new() {
-      "File", $"{report.Units} fully covered", 
-      $"{report.Units} not covered", 
-      $"{report.Units} partially covered"};
-    
+    List<object> header = new() {
+      "File",
+      $"{report.Units} fully covered",
+      $"{report.Units} not covered",
+      $"{report.Units} partially covered"
+    };
+
     List<List<object>> body = new();
     foreach (var sourceFile in sourceFileToCoverageReportFile.Keys) {
       var relativePath = Path.GetRelativePath(baseDirectory, sourceFileToCoverageReportFile[sourceFile]);
@@ -103,7 +105,7 @@ public class CoverageReporter {
         report.CoverageSpansForFile(sourceFile).Count(span => span.Label == CoverageLabel.PartiallyCovered)
       });
     }
-    
+
     List<object> footer = new() {
       "Total",
       report.AllFiles().Select(sourceFile =>
@@ -113,13 +115,13 @@ public class CoverageReporter {
       report.AllFiles().Select(sourceFile =>
         report.CoverageSpansForFile(sourceFile).Count(span => span.Label == CoverageLabel.PartiallyCovered)).Sum()
     };
-    
+
     var templateText = new StreamReader(templateStream).ReadToEnd();
     templateText = LinksToOtherReportsRegex.Replace(templateText, linksToOtherReports);
     templateText = FileNameRegex.Replace(templateText, report.Name);
     templateText = TableHeaderRegex.Replace(templateText, MakeIndexFileTableRow(header));
     templateText = TableFooterRegex.Replace(templateText, MakeIndexFileTableRow(footer));
-    File.WriteAllText(Path.Combine(baseDirectory, $"index{report.UniqueId}html"), 
+    File.WriteAllText(Path.Combine(baseDirectory, $"index{report.UniqueId}html"),
       TableBodyRegex.Replace(templateText, string.Join("\n", body.Select(MakeIndexFileTableRow))));
   }
 
@@ -138,7 +140,7 @@ public class CoverageReporter {
     return result.ToString();
   }
 
-  
+
   /// <summary>
   /// Copy all .css style files from Source/DafnyCore/assets/.resources (which are packaged with the assembly)
   /// into the base directory of the coverage report being created
@@ -167,7 +169,7 @@ public class CoverageReporter {
         new StreamReader(styleFileStream).ReadToEnd());
     }
   }
-  
+
   private string HtmlReportForFile(CoverageReport report, string pathToSourceFile, string baseDirectory, string linksToOtherReports) {
     var source = new StreamReader(pathToSourceFile).ReadToEnd();
     var lines = source.Split("\n");
@@ -196,7 +198,7 @@ public class CoverageReporter {
     templateText = FileNameRegex.Replace(templateText, $"{Path.GetFileName(pathToSourceFile)} ({report.Name})");
     return LabeledCodeRegex.Replace(templateText, labeledCode);
   }
-  
+
   /// <summary>
   /// Append code from <param name="lines"></param> that lies between <param name="start"></param> and
   /// <param name="end"></param> tokens to the <param name="stringBuilder"></param>

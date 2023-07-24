@@ -7,7 +7,7 @@ public enum CoverageLabel {
 }
 
 public static class CoverageLabelExtension {
-  
+
   /// <summary>
   /// Return coverage label for a program location that is covered by several overlapping coverage spans
   /// </summary>
@@ -17,7 +17,7 @@ public static class CoverageLabelExtension {
     }
     return one;
   }
-  
+
   public static string OpenHtmlTag(CoverageLabel label) {
     switch (label) {
       case CoverageLabel.FullyCovered:
@@ -29,7 +29,7 @@ public static class CoverageLabelExtension {
     }
     return "";
   }
-  
+
   public static string CloseHtmlTag(CoverageLabel label) {
     return "</span>";
   }

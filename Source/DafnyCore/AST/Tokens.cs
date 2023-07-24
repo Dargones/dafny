@@ -121,7 +121,7 @@ public class Token : IToken {
   public override string ToString() {
     return $"'{val}': {Path.GetFileName(Filepath)}@{pos} - @{line}:{col}";
   }
-  
+
   public int CompareTo(IToken other) {
     if (line != other.line) {
       return line.CompareTo(other.line);

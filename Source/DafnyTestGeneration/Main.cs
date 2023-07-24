@@ -27,7 +27,7 @@ namespace DafnyTestGeneration {
     public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program, Modifications cache) {
 
       program.Reporter.Options.PrintMode = PrintModes.Everything;
-      
+
       var modifications = GetModifications(cache, program).ToList();
       var blocksReached = modifications.Count;
       HashSet<string> allStates = new();
@@ -105,7 +105,7 @@ namespace DafnyTestGeneration {
       if (options.TestGenOptions.PrintCoverage == null) {
         return;
       }
-      var coverageReport = new CoverageReport(program, name:"Expected Test Coverage", units:"Locations");
+      var coverageReport = new CoverageReport(program, name: "Expected Test Coverage", units: "Locations");
       var lineRegex = new Regex("^(.*)\\(([0-9]+),[0-9]+\\)");
       HashSet<string> coveredStates = new(); // set of program states that are expected to be covered by tests
       foreach (var modification in cache.Values) {
@@ -134,7 +134,7 @@ namespace DafnyTestGeneration {
           } catch (ArgumentException) {
             continue;
           }
-          var rangeToken = new RangeToken(new Token(lineNumber, 0), new Token(lineNumber+1, 0));
+          var rangeToken = new RangeToken(new Token(lineNumber, 0), new Token(lineNumber + 1, 0));
           rangeToken.Uri = uri;
           coverageReport.LabelCode(rangeToken,
             coveredStates.Contains(state)
@@ -143,7 +143,7 @@ namespace DafnyTestGeneration {
         }
       }
       new CoverageReporter(program.Reporter)
-        .GenerateCoverageReportFiles(new() {coverageReport, new CoverageReport(program, "C# Runtime Coverage", "Lines"), new CoverageReport(program, "Java Runtime Coverage", "Lines")}, options.TestGenOptions.PrintCoverage);
+        .GenerateCoverageReportFiles(new() { coverageReport, new CoverageReport(program, "C# Runtime Coverage", "Lines"), new CoverageReport(program, "Java Runtime Coverage", "Lines") }, options.TestGenOptions.PrintCoverage);
     }
 
     /// <summary>
@@ -224,7 +224,7 @@ namespace DafnyTestGeneration {
       }
       yield return TestMethod.EmitSynthesizeMethods(dafnyInfo);
       yield return "}";
-      
+
       PrintCoverageReport(program, cache, options);
 
       if (methodsGenerated == 0) {

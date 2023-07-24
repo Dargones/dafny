@@ -8,13 +8,13 @@ namespace DafnyCore.CoverageReporter;
 public class CoverageReport {
 
   private static int nextUniqueId = 0;
-  
+
   // INVARIANT: CoverageSpans are sorted within each list by the position of the StartToken
-  private readonly Dictionary<string, List<CoverageSpan>> labeledFiles;  
+  private readonly Dictionary<string, List<CoverageSpan>> labeledFiles;
   public readonly string Name; // the name to assign to this coverage report
   public readonly string Units; // the units of coverage (plural). This will be written in the coverage report table.
   private readonly int uniqueId = nextUniqueId++;
-  public string UniqueId => "." + (uniqueId == 0? "" : (uniqueId + ".")); // to add as postfix to files
+  public string UniqueId => "." + (uniqueId == 0 ? "" : (uniqueId + ".")); // to add as postfix to files
 
   /// <summary>
   /// Generate a new empty coverage report for a given program.
@@ -30,7 +30,7 @@ public class CoverageReport {
       labeledFiles[fileName] = new();
     }
   }
-  
+
   /// <summary>
   /// Assign a coverage label to the code indicated by the <param name="span"></param> range token.
   /// If the span intersects with existing coverage information, it will be merged according to

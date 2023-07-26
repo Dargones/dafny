@@ -51,7 +51,7 @@ namespace DafnyTestGeneration {
           foreach (var path in GeneratePaths(implementation, pathLength - PathLengthStep, pathLength)) {
             if (pathLength > PathLengthStep) {
               var subpath = modifications.GetProgramModification(
-                $"{path.Impl.VerboseName.Split(" ")[0]} {path.FirstNBlocksAsString(pathLength - PathLengthStep)}");
+                $"{path.Impl.VerboseName.Split(" ")[0]} {path.FirstNBlocksAsString(pathLength - PathLengthStep, DafnyInfo.Options)}");
               if (subpath == null || subpath.CounterexampleStatus != ProgramModification.Status.Success) {
                 continue; // if a subpath is infeasible there is no reason to try out this one
               }
@@ -62,7 +62,7 @@ namespace DafnyTestGeneration {
               ? TestEntries
               : new() { path.Impl.VerboseName };
             yield return modifications.GetProgramModification(p, path.Impl, new HashSet<string>(), testEntryNames,
-              $"{path.Impl.VerboseName.Split(" ")[0]} {path.FirstNBlocksAsString()}");
+              $"{path.Impl.VerboseName.Split(" ")[0]} {path.FirstNBlocksAsString(-1, DafnyInfo.Options)}");
             path.NoAssertPath();
           }
           pathLength += PathLengthStep;
@@ -157,11 +157,11 @@ namespace DafnyTestGeneration {
         this.pathBlocks = pathBlocks;
       }
 
-      public string FirstNBlocksAsString(int n = -1) {
+      public string FirstNBlocksAsString(int n, DafnyOptions options) {
         if (n == -1) {
-          return $"path through {string.Join(",", pathBlocks.ConvertAll(Utils.GetBlockId).Where(id => id != null))}";
+          return $"path through {string.Join(",", pathBlocks.ConvertAll(block => Utils.GetBlockId(block, options)).Where(id => id != null))}";
         }
-        return $"path through {string.Join(",", pathBlocks.ConvertAll(Utils.GetBlockId).Take(n).Where(id => id != null))}";
+        return $"path through {string.Join(",", pathBlocks.ConvertAll(block => Utils.GetBlockId(block, options)).Take(n).Where(id => id != null))}";
       }
 
       /// <summary>

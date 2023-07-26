@@ -29,6 +29,7 @@ namespace Microsoft.Dafny {
         foreach (var arg in s.Args) {
           TrStmt_CheckWellformed(arg, builder, locals, etran, false);
         }
+        builder.AddCaptureState(stmt);
 
       } else if (stmt is RevealStmt) {
         AddComment(builder, stmt, "reveal statement");

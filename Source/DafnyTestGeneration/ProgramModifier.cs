@@ -45,7 +45,7 @@ namespace DafnyTestGeneration {
         implementation.Attributes = attribute;
       }
       if (options.TestGenOptions.Mode is TestGenerationOptions.Modes.Block or TestGenerationOptions.Modes.Path) {
-        program = new AnnotationVisitor().VisitProgram(program);
+        program = new AnnotationVisitor(options).VisitProgram(program);
       }
       AddAxioms(options, program);
       program.Resolve(options);
@@ -58,7 +58,7 @@ namespace DafnyTestGeneration {
       program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && Utils.DeclarationHasAttribute(declaration, "inline"));
       program = new RemoveChecks(options).VisitProgram(program);
       if (options.TestGenOptions.Mode is TestGenerationOptions.Modes.Branch) {
-        program = new AnnotationVisitor().VisitProgram(program);
+        program = new AnnotationVisitor(options).VisitProgram(program);
       }
       TestEntries = program.Implementations
         .Where(implementation =>
@@ -140,9 +140,14 @@ namespace DafnyTestGeneration {
     /// </summary>
     private class AnnotationVisitor : StandardVisitor {
       private Implementation/*?*/ implementation;
+      private DafnyOptions options;
+
+      public AnnotationVisitor(DafnyOptions options) {
+        this.options = options;
+      }
 
       public override Block VisitBlock(Block node) {
-        var state = Utils.GetBlockId(node);
+        var state = Utils.GetBlockId(node, options);
         if (state == null) { // cannot map back to Dafny source location
           return base.VisitBlock(node);
         }

@@ -42,8 +42,8 @@ namespace DafnyTestGeneration {
 
     public int NumberOfBlocksCovered(Implementation implementation, bool onlyIfTestsExists = false) {
       return NumberOfBlocksCovered(implementation.Blocks
-        .Where(block => Utils.GetBlockId(block) != null)
-        .Select(Utils.GetBlockId).ToHashSet(), onlyIfTestsExists);
+        .Where(block => Utils.GetBlockId(block, options) != null)
+        .Select(block => Utils.GetBlockId(block, options)).ToHashSet(), onlyIfTestsExists);
     }
 
     public int NumberOfBlocksCovered(HashSet<string> blockIds, bool onlyIfTestsExists = false) {

@@ -1709,42 +1709,6 @@ BplBoundVar(varNameGen.FreshId(string.Format("#{0}#", bv.Name)), predef.BoxType,
         return translator.BoxIfNecessary(tok, e, fromType);
       }
 
-      public static Boogie.NAryExpr ReadHeap(IToken tok, Expr heap, Expr r, Expr f) {
-        Contract.Requires(tok != null);
-        Contract.Requires(heap != null);
-        Contract.Requires(r != null);
-        Contract.Requires(f != null);
-        Contract.Ensures(Contract.Result<Boogie.NAryExpr>() != null);
-
-        List<Boogie.Expr> args = new List<Boogie.Expr>();
-        args.Add(heap);
-        args.Add(r);
-        args.Add(f);
-        Boogie.Type t = (f.Type != null) ? f.Type : f.ShallowType;
-        return new Boogie.NAryExpr(tok,
-          new Boogie.FunctionCall(new Boogie.IdentifierExpr(tok, "read", t.AsCtor.Arguments[0])),
-          args);
-      }
-
-
-      public static Boogie.NAryExpr UpdateHeap(IToken tok, Expr heap, Expr r, Expr f, Expr v) {
-        Contract.Requires(tok != null);
-        Contract.Requires(heap != null);
-        Contract.Requires(r != null);
-        Contract.Requires(f != null);
-        Contract.Requires(v != null);
-        Contract.Ensures(Contract.Result<Boogie.NAryExpr>() != null);
-
-        List<Boogie.Expr> args = new List<Boogie.Expr>();
-        args.Add(heap);
-        args.Add(r);
-        args.Add(f);
-        args.Add(v);
-        return new Boogie.NAryExpr(tok,
-          new Boogie.FunctionCall(new Boogie.IdentifierExpr(tok, "update", heap.Type)),
-          args);
-      }
-
       /// <summary>
       /// Translate like s[Box(elmt)], but try to avoid as many set functions as possible in the
       /// translation, because such functions can mess up triggering.

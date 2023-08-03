@@ -28,17 +28,17 @@ namespace DafnyTestGeneration {
 
       program.Reporter.Options.PrintMode = PrintModes.Everything;
       
-      var modifications = GetModifications(cache, program, out _).ToList();
-      var blocksReached = modifications.Count;
+      var blocksReached = 0;
       HashSet<string> allStates = new();
       HashSet<string> allDeadStates = new();
 
       // Generate tests based on counterexamples produced from modifications
-      for (var i = modifications.Count - 1; i >= 0; i--) {
-        await modifications[i].GetCounterExampleLog(cache);
+      foreach (var modification in GetModifications(cache, program, out _)) {
+        blocksReached++;
+        await modification.GetCounterExampleLog(cache);
         var deadStates = new HashSet<string>();
-        if (!modifications[i].IsCovered(cache)) {
-          deadStates = modifications[i].CapturedStates;
+        if (!modification.IsCovered(cache)) {
+          deadStates = modification.CapturedStates;
         }
 
         if (deadStates.Count != 0) {
@@ -48,10 +48,16 @@ namespace DafnyTestGeneration {
           blocksReached--;
           allDeadStates.UnionWith(deadStates);
         }
-        allStates.UnionWith(modifications[i].CapturedStates);
+
+        foreach (var state in modification.CapturedStates) {
+          if (!allStates.Contains(state)) {
+            yield return $"Code at {state} is reachable.";
+            allStates.Add(state);
+          }
+        }
       }
 
-      yield return $"Out of {modifications.Count} basic blocks " +
+      yield return $"Out of {blocksReached} basic blocks " +
                    $"({allStates.Count} capturedStates), {blocksReached} " +
                    $"({allStates.Count - allDeadStates.Count}) are reachable. " +
                    "There might be false negatives if you are not unrolling " +
@@ -65,6 +71,10 @@ namespace DafnyTestGeneration {
       if (program == null) {
         yield return "Cannot parse program";
         yield break;
+      }
+      if (Utils.ProgramHasAttribute(program,
+            TestGenerationOptions.TestInlineAttribute)) {
+        options.VerifyAllModules = true;
       }
       var cache = new Modifications(program.Options);
       await foreach (var line in GetDeadCodeStatistics(program, cache)) {

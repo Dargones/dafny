@@ -4,6 +4,8 @@ using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Linq;
 using DafnyCore;
+using Microsoft.Boogie;
+
 // Copyright by the contributors to the Dafny Project
 // SPDX-License-Identifier: MIT
 
@@ -24,7 +26,7 @@ public class GenerateTestsCommand : ICommandSpec {
       BoogieOptionBag.VerificationTimeLimit,
       PrintBpl,
       PrintCoverage,
-      DisablePrune
+      ForcePrune
     }.Concat(ICommandSpec.ConsoleOutputOptions).
       Concat(ICommandSpec.ResolverOptions);
 
@@ -60,8 +62,16 @@ path - Prints path-coverage tests for the given program.");
   }
 
   public void PostProcess(DafnyOptions dafnyOptions, Options options, InvocationContext context) {
-    // IMPORTANT: Before adding new default options, make sure they are
-    // appropriately copied over in the CopyForProcedure method above
+    var mode = context.ParseResult.GetValueForArgument(modeArgument) switch {
+      Mode.Path => TestGenerationOptions.Modes.Path,
+      Mode.Block => TestGenerationOptions.Modes.Block,
+      Mode.Branch => TestGenerationOptions.Modes.Branch,
+      _ => throw new ArgumentOutOfRangeException()
+    };
+    PostProcess(dafnyOptions, options, context, mode);
+  }
+  
+  internal static void PostProcess(DafnyOptions dafnyOptions, Options options, InvocationContext context, TestGenerationOptions.Modes mode) {
     dafnyOptions.CompilerName = "cs";
     dafnyOptions.Compile = true;
     dafnyOptions.RunAfterCompile = false;
@@ -69,15 +79,9 @@ path - Prints path-coverage tests for the given program.");
     dafnyOptions.DeprecationNoise = 0;
     dafnyOptions.ForbidNondeterminism = true;
     dafnyOptions.DefiniteAssignmentLevel = 2;
+    dafnyOptions.TypeEncodingMethod = CoreOptions.TypeEncoding.Predicates;
     dafnyOptions.Set(DafnyConsolePrinter.ShowSnippets, false);
-
-    var mode = context.ParseResult.GetValueForArgument(modeArgument);
-    dafnyOptions.TestGenOptions.Mode = mode switch {
-      Mode.Path => TestGenerationOptions.Modes.Path,
-      Mode.Block => TestGenerationOptions.Modes.Block,
-      Mode.Branch => TestGenerationOptions.Modes.Branch,
-      _ => throw new ArgumentOutOfRangeException()
-    };
+    dafnyOptions.TestGenOptions.Mode = mode;
   }
 
   public static readonly Option<uint> SequenceLengthLimit = new("--length-limit",
@@ -94,8 +98,8 @@ path - Prints path-coverage tests for the given program.");
     "Emit expected test coverage report to a given directory.") {
     ArgumentHelpName = "directory"
   };
-  public static readonly Option<bool> DisablePrune = new("--no-prune",
-    "Disable axiom pruning that Dafny uses to speed up verification.") {
+  public static readonly Option<bool> ForcePrune = new("--force-prune",
+    "Enable axiom pruning that Dafny uses to speed up verification.") {
   };
   static GenerateTestsCommand() {
     DafnyOptions.RegisterLegacyBinding(LoopUnroll, (options, value) => {
@@ -110,8 +114,8 @@ path - Prints path-coverage tests for the given program.");
     DafnyOptions.RegisterLegacyBinding(PrintCoverage, (options, value) => {
       options.TestGenOptions.PrintCoverage = value;
     });
-    DafnyOptions.RegisterLegacyBinding(DisablePrune, (options, value) => {
-      options.TestGenOptions.DisablePrune = value;
+    DafnyOptions.RegisterLegacyBinding(ForcePrune, (options, value) => {
+      options.TestGenOptions.ForcePrune = value;
     });
 
     DooFile.RegisterNoChecksNeeded(
@@ -119,7 +123,7 @@ path - Prints path-coverage tests for the given program.");
       SequenceLengthLimit,
       PrintBpl,
       PrintCoverage,
-      DisablePrune
+      ForcePrune
     );
   }
 }

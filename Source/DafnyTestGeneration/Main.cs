@@ -27,7 +27,7 @@ namespace DafnyTestGeneration {
     public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program, Modifications cache) {
 
       program.Reporter.Options.PrintMode = PrintModes.Everything;
-      
+
       var blocksReached = 0;
       HashSet<string> allStates = new();
       HashSet<string> allDeadStates = new();

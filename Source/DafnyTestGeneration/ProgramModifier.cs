@@ -75,7 +75,7 @@ namespace DafnyTestGeneration {
 
     protected bool ImplementationIsToBeTested(Implementation impl) =>
       Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestEntryAttribute) &&
-      impl.Name.StartsWith(ImplPrefix) && !impl.Name.EndsWith(CtorPostfix);
+    impl.Name.StartsWith(ImplPrefix) && !impl.Name.EndsWith(CtorPostfix);
 
     /// <summary>
     /// Add axioms necessary for counterexample generation to work efficiently

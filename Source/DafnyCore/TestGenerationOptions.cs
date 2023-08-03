@@ -16,5 +16,5 @@ namespace Microsoft.Dafny {
     public const uint DefaultTimeLimit = 10;
     public string PrintCoverage = null;
 
-  }
+}
 }

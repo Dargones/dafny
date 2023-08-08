@@ -1,6 +1,10 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
 using System.Collections.Generic;
 using Microsoft.Boogie;
+using Microsoft.Dafny;
 using LiteralExpr = Microsoft.Boogie.LiteralExpr;
 using Program = Microsoft.Boogie.Program;
 using Token = Microsoft.Boogie.Token;
@@ -30,15 +34,17 @@ namespace DafnyTestGeneration {
       }
 
       var state = Utils.GetBlockId(node);
-      if (state == node.Label) { // ignore blocks with zero commands
+      if (state == null) {
         return null;
       }
 
-      var procedureName = implementation.VerboseName;
+      var testEntryNames = Utils.DeclarationHasAttribute(implementation, TestGenerationOptions.TestInlineAttribute)
+        ? TestEntries
+        : new() { implementation.VerboseName };
       node.cmds.Add(new AssertCmd(new Token(), new LiteralExpr(new Token(), false)));
       var record = modifications.GetProgramModification(program, implementation,
         new HashSet<string>() { state },
-          procedureName, $"{procedureName.Split(" ")[0]} ({state})");
+          testEntryNames, $"{implementation.VerboseName.Split(" ")[0]} ({state})");
 
       node.cmds.RemoveAt(node.cmds.Count - 1);
       if (record.IsCovered(modifications)) {

@@ -1,5 +1,7 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -32,10 +34,10 @@ namespace DafnyTestGeneration {
     private readonly List<VisibilityScope> scopes;
     public bool SetNonZeroExitCode = false;
     private readonly bool suppressErrorMessages = false;
-
-    public DafnyInfo(Program program, bool suppressErrorMessages=false) {
+    
+    public DafnyInfo(Program program, bool suppressErrorMessages = false) {
       this.suppressErrorMessages = suppressErrorMessages;
-      this.Options = program.Options;
+      Options = program.Options;
       subsetToSuperset["_System.string"] = new(
         new List<TypeParameter>(),
         new SeqType(new CharType()));
@@ -158,7 +160,10 @@ namespace DafnyTestGeneration {
       return true;
     }
 
-    private uint GetTestInlineAttributeValue(MemberDecl callable) {
+    /// <summary>
+    /// Check that function/methods annotated with :testInline use this attribute correctly
+    /// </summary>
+    private void CheckInlineAttributeValue(MemberDecl callable) {
       Attributes attributes = callable.Attributes;
       while (attributes != null) {
         if (attributes.Name == TestGenerationOptions.TestInlineAttribute) {
@@ -171,10 +176,10 @@ namespace DafnyTestGeneration {
             }
 
             SetNonZeroExitCode = true;
-            return 1;
+            return;
           }
           if (uint.TryParse(attributes.Args.First().ToString(), out uint result) && result > 0) {
-            return result;
+            return;
           }
 
           if (!suppressErrorMessages) {
@@ -184,27 +189,10 @@ namespace DafnyTestGeneration {
           }
 
           SetNonZeroExitCode = true;
-          return 0;
+          return;
         }
         attributes = attributes.Prev;
       }
-      return 0;
-    }
-
-    /// <summary>
-    /// Return the number of times a given Dafny method should be inlined for
-    /// test generation purposes.
-    /// </summary>
-    /// <param name="callable"></param>
-    /// <returns></returns>
-    public uint TimesToInline(string callable) {
-      if (methods.ContainsKey(callable)) {
-        return GetTestInlineAttributeValue(methods[callable]);
-      }
-      if (functions.ContainsKey(callable)) {
-        return GetTestInlineAttributeValue(functions[callable]);
-      }
-      return 0;
     }
 
     public bool IsAccessible(string callable) {
@@ -425,6 +413,14 @@ namespace DafnyTestGeneration {
       }
       return result;
     }
+
+    public bool IsClassType(UserDefinedType/*?*/ type) {
+      if (type == null || !classes.ContainsKey(type.Name)) {
+        return false;
+      }
+      return true;
+    }
+
     public bool IsExtern(UserDefinedType/*?*/ type) {
       if (type == null || !classes.ContainsKey(type.Name)) {
         if (!suppressErrorMessages) {
@@ -433,7 +429,7 @@ namespace DafnyTestGeneration {
         }
 
         SetNonZeroExitCode = true;
-        return true;
+        return false;
       }
       return classes[type.Name].IsExtern(Options, out _, out _);
     }
@@ -568,6 +564,7 @@ which may not match the associated condition, if any".TrimStart();
       }
 
       private void Visit(MemberDecl d) {
+        info.CheckInlineAttributeValue(d);
         if (d is Method method) {
           Visit(method);
         } else if (d is Function function) {
@@ -588,34 +585,6 @@ which may not match the associated condition, if any".TrimStart();
 
       private new void Visit(Method m) {
         info.methods[m.FullDafnyName] = m;
-        if (!HasAttribute(m, TestGenerationOptions.TestConstructorAttribute)) {
-          return;
-        }
-        if (m.Ins.Count != 1 && m.Req.Count != 0 && m.IsStatic) {
-          info.SetNonZeroExitCode = true;
-          if (!info.suppressErrorMessages) {
-            info.Options.Printer.ErrorWriteLine(Console.Error,
-              $"*** Error: Methods annotated with " +
-              $"{TestGenerationOptions.TestConstructorAttribute} must be " +
-              $"static, have no preconditions, and have a single return " +
-              $"parameter. Method {m.FullDafnyName} violates these conditions.");
-          }
-
-          return;
-        }
-        var returnType = Utils.UseFullName(m.Outs[0].Type).ToString();
-        if (info.userDefinedConstructorForType.ContainsKey(returnType)) {
-          info.SetNonZeroExitCode = true;
-          if (!info.suppressErrorMessages) {
-            info.Options.Printer.ErrorWriteLine(Console.Error,
-              $"*** Error: Found two methods annotated with " +
-              $"{TestGenerationOptions.TestConstructorAttribute}. Will use " +
-              $"{info.userDefinedConstructorForType[returnType].FullDafnyName}.");
-          }
-
-          return;
-        }
-        info.userDefinedConstructorForType[returnType] = m;
       }
 
       private new void Visit(Function f) {

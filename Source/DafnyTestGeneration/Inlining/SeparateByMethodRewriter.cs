@@ -1,5 +1,8 @@
-#nullable disable
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 
+#nullable disable
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Boogie;
@@ -16,7 +19,13 @@ public class SeparateByMethodRewriter : IRewriter {
 
   private readonly List<Method> methodsToAdd = new();
 
-  public SeparateByMethodRewriter(ErrorReporter reporter) : base(reporter) { }
+  // determines whether the given function-by-method should be split into a function and a method
+  private readonly Func<MemberDecl, bool> shouldProcessPredicate;
+
+  public SeparateByMethodRewriter(ErrorReporter reporter, Func<MemberDecl, bool> shouldProcessPredicate) :
+    base(reporter) {
+    this.shouldProcessPredicate = shouldProcessPredicate;
+  }
 
   public void PostResolve(Program program) {
     SeparateByMethod(program.DefaultModule);
@@ -24,10 +33,10 @@ public class SeparateByMethodRewriter : IRewriter {
 
   private void SeparateByMethod(TopLevelDecl d) {
     if (d is LiteralModuleDecl moduleDecl) {
-      moduleDecl.ModuleDef.TopLevelDecls.Iter(SeparateByMethod);
+      moduleDecl.ModuleDef.TopLevelDecls.ForEach(SeparateByMethod);
     } else if (d is TopLevelDeclWithMembers withMembers) {
       methodsToAdd.Clear();
-      withMembers.Members.OfType<Function>().Iter(SeparateByMethod);
+      withMembers.Members.Where(shouldProcessPredicate).OfType<Function>().ForEach(SeparateByMethod);
       withMembers.Members.AddRange(methodsToAdd);
     }
   }

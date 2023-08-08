@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using DafnyTestGeneration.Inlining;
@@ -23,9 +25,9 @@ public class Inlining {
   }
 
   private async Task ShortCircuitRemovalTest(string source, string expectedResult, bool isByMethod=true) {
-    var options = Setup.GetDafnyOptions(output);
+    var options = Setup.GetDafnyOptions(new List<Action<DafnyOptions>>(), output, Array.Empty<string>());
     var program = Utils.Parse(options, source, false);
-    var boogieProgram = InliningTranslator.TranslateAndInline(program, options);
+    Assert.True(InliningTranslator.TranslateForFutureInlining(program, options, out var boogieProgram));
     var method = program.DefaultModuleDef.Children.OfType<DefaultClassDecl>().First()?.Children.OfType<Method>().First();
     Assert.NotNull(method);
     Assert.Equal(isByMethod, method.IsByMethod);

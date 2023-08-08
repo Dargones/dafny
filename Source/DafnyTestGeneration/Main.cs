@@ -1,3 +1,6 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 #nullable disable
 using System;
 using System.Collections.Generic;
@@ -70,10 +73,16 @@ namespace DafnyTestGeneration {
 
     private static IEnumerable<ProgramModification> GetModifications(Modifications cache, Program program) {
       var options = program.Options;
-      var boogieProgram = Inlining.InliningTranslator.TranslateAndInline(program, options);
+      var success = Inlining.InliningTranslator.TranslateForFutureInlining(program, options, out var boogieProgram);
+      if (!success) {
+        options.Printer.ErrorWriteLine(options.ErrorWriter,
+          $"Error: Failed at resolving or translating the inlined Dafny code.");
+        SetNonZeroExitCode = true;
+        return new List<ProgramModification>();
+      }
       var dafnyInfo = new DafnyInfo(program);
       SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
-      if (!Utils.AttributeFinder.ProgramHasAttribute(program,
+      if (!Utils.ProgramHasAttribute(program,
             TestGenerationOptions.TestEntryAttribute)) {
         options.Printer.ErrorWriteLine(options.ErrorWriter,
           $"Error: Found no methods or functions annotated with {TestGenerationOptions.TestEntryAttribute}. " +
@@ -93,7 +102,7 @@ namespace DafnyTestGeneration {
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache=null) {
+    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(Program program, Modifications cache = null) {
 
       var options = program.Options;
       options.PrintMode = PrintModes.Everything;
@@ -101,6 +110,7 @@ namespace DafnyTestGeneration {
 
       cache ??= new Modifications(options);
       var programModifications = GetModifications(cache, program).ToList();
+      // Suppressing error messages which will be printed when dafnyInfo is initialized again in GetModifications
       var dafnyInfo = new DafnyInfo(program, true);
       SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
       foreach (var modification in programModifications) {
@@ -130,11 +140,11 @@ namespace DafnyTestGeneration {
       if (program == null) {
         yield break;
       }
-      if (Utils.AttributeFinder.ProgramHasAttribute(program,
+      if (Utils.ProgramHasAttribute(program,
             TestGenerationOptions.TestInlineAttribute)) {
         options.VerifyAllModules = true;
       }
-      // Suppressing error messages here because dafnyInfo is going to be initialized one more time later on
+      // Suppressing error messages which will be printed when dafnyInfo is initialized again in GetModifications
       var dafnyInfo = new DafnyInfo(program, true);
       program = Utils.Parse(options, source, false, uri);
       SetNonZeroExitCode = dafnyInfo.SetNonZeroExitCode || SetNonZeroExitCode;
@@ -153,7 +163,7 @@ namespace DafnyTestGeneration {
           yield return $"import {dafnyInfo.ToImportAs[module]} = {module}";
         }
       }
-      
+
       var cache = new Modifications(options);
       var methodsGenerated = 0;
       await foreach (var method in GetTestMethodsForProgram(program, cache)) {
@@ -162,7 +172,7 @@ namespace DafnyTestGeneration {
       }
       
       foreach (var implementation in cache.Values
-                 .Select(modification => modification.implementation).ToHashSet()) {
+                 .Select(modification => modification.Implementation).ToHashSet()) {
         int failedQueries = cache.ModificationsWithStatus(implementation,
           ProgramModification.Status.Failure);
         int queries = failedQueries + cache.ModificationsWithStatus(implementation,
@@ -179,6 +189,26 @@ namespace DafnyTestGeneration {
                      $"A total of {queries} SMT queries were made to cover " +
                      $"this method or the method into which this method was inlined. " +
                      $"{failedQueries} queries did not return a counterexample.";
+      }
+
+      foreach (var implementation in cache.Values
+                 .Select(modification => modification.Implementation).ToHashSet()) {
+        int failedQueries = cache.ModificationsWithStatus(implementation,
+          ProgramModification.Status.Failure);
+        int queries = failedQueries + cache.ModificationsWithStatus(implementation,
+          ProgramModification.Status.Success);
+        int blocks = implementation.Blocks.Where(block => Utils.GetBlockId(block) != block.Label).ToHashSet().Count;
+        int coveredByCounterexamples = cache.NumberOfBlocksCovered(implementation);
+        int coveredByTests = cache.NumberOfBlocksCovered(implementation, onlyIfTestsExists: true);
+        yield return $"// Out of {blocks} locations in the " +
+                     $"{implementation.VerboseName.Split(" ")[0]} method, " +
+                     $"{coveredByTests} should be covered by tests " +
+                     $"(assuming no tests were found to be duplicates of each other). " +
+                     $"Moreover, {coveredByCounterexamples} locations have been found to be reachable " +
+                     $"(i.e. the verifier did not timeout and produced example inputs to reach these locations). " +
+                     $"A total of {queries} SMT queries were made to cover " +
+                     $"this method or the method into which this method was inlined. " +
+                     $"{failedQueries} queries timed out or identified potential dead code.";
       }
 
       yield return TestMethod.EmitSynthesizeMethods(dafnyInfo);

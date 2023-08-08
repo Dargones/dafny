@@ -1,3 +1,9 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
+#nullable disable
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -9,15 +15,16 @@ using Xunit;
 using Xunit.Abstractions;
 
 namespace DafnyTestGeneration.Test {
-  public class BasicTypes {
+  public class BasicTypes : Setup {
     private readonly TextWriter output;
 
     public BasicTypes(ITestOutputHelper output) {
       this.output = new WriterFromOutputHelper(output);
     }
 
-    [Fact]
-    public async Task Ints() {
+    [Theory]
+    [MemberData(nameof(OptionSettings))]
+    public async Task Ints(List<Action<DafnyOptions>> optionSettings) {
       var source = @"
 module SimpleTest {
   method {:testEntry} compareToZero(i: int) returns (ret: int) {
@@ -30,8 +37,7 @@ module SimpleTest {
   }
 }
 ".TrimStart();
-      var options = Setup.GetDafnyOptions(output);
-      var program = Utils.Parse(options, source, false);
+      var program = Utils.Parse(GetDafnyOptions(optionSettings, output), source, false);
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
       Assert.True(3 <= methods.Count);
       Assert.True(methods.All(m =>
@@ -47,8 +53,9 @@ module SimpleTest {
         Regex.IsMatch(m.ArgValues[0], "[1-9][0-9]*")));
     }
 
-    [Fact]
-    public async Task Bools() {
+    [Theory]
+    [MemberData(nameof(OptionSettings))]
+    public async Task Bools(List<Action<DafnyOptions>> optionSettings) {
       var source = @"
 module SimpleTest {
   method {:testEntry} checkIfTrue(b: bool) returns (ret: bool) {
@@ -59,7 +66,7 @@ module SimpleTest {
   }
 }
 ".TrimStart();
-      var program = Utils.Parse(Setup.GetDafnyOptions(output), source, false);
+      var program = Utils.Parse(GetDafnyOptions(optionSettings, output), source, false);
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
       Assert.True(2 <= methods.Count);
       Assert.True(methods.All(m => m.MethodName == "SimpleTest.checkIfTrue"));
@@ -71,8 +78,9 @@ module SimpleTest {
       Assert.True(methods.Exists(m => m.ArgValues[0] == "true"));
     }
 
-    [Fact]
-    public async Task Reals() {
+    [Theory]
+    [MemberData(nameof(OptionSettings))]
+    public async Task Reals(List<Action<DafnyOptions>> optionSettings) {
       var source = @"
 module SimpleTest {
   method {:testEntry} compareToZero(r: real) returns (ret: int) {
@@ -93,7 +101,7 @@ module SimpleTest {
   }
 }
 ".TrimStart();
-      var program = Utils.Parse(Setup.GetDafnyOptions(output), source, false);
+      var program = Utils.Parse(GetDafnyOptions(optionSettings, output), source, false);
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
       Assert.True(7 <= methods.Count);
       Assert.True(
@@ -111,8 +119,9 @@ module SimpleTest {
         "[1-9][0-9]*\\.[0-9]*/[1-9][0-9]*\\.[0-9]*")));
     }
 
-    [Fact]
-    public async Task BitVectors() {
+    [Theory]
+    [MemberData(nameof(OptionSettings))]
+    public async Task BitVectors(List<Action<DafnyOptions>> optionSettings) {
       var source = @"
 module SimpleTest {
   method {:testEntry} compareToBase(r: bv10) returns (ret: int) {
@@ -126,7 +135,7 @@ module SimpleTest {
   }
 }
 ".TrimStart();
-      var program = Utils.Parse(Setup.GetDafnyOptions(output), source, false);
+      var program = Utils.Parse(GetDafnyOptions(optionSettings, output), source, false);
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
       Assert.True(3 <= methods.Count);
       Assert.True(
@@ -142,8 +151,9 @@ module SimpleTest {
         Regex.IsMatch(m.ArgValues[0], "\\([1-9][0-9]+ as bv10\\)")));
     }
 
-    [Fact]
-    public async Task Chars() {
+    [Theory]
+    [MemberData(nameof(OptionSettings))]
+    public async Task Chars(List<Action<DafnyOptions>> optionSettings) {
       var source = @"
 module SimpleTest {
   method {:testEntry} compareToB(c: char) returns (ret: int) {
@@ -157,7 +167,7 @@ module SimpleTest {
   }
 }
 ".TrimStart();
-      var program = Utils.Parse(Setup.GetDafnyOptions(output), source, false);
+      var program = Utils.Parse(GetDafnyOptions(optionSettings, output), source, false);
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
       Assert.True(3 <= methods.Count);
       Assert.True(methods.All(m => m.MethodName == "SimpleTest.compareToB"));
@@ -172,8 +182,9 @@ module SimpleTest {
         m.ArgValues[0].Length == 3 && m.ArgValues[0][1] < 'B'));
     }
 
-    [Fact]
-    public async Task CharsUnspecified() {
+    [Theory]
+    [MemberData(nameof(OptionSettings))]
+    public async Task CharsUnspecified(List<Action<DafnyOptions>> optionSettings) {
       // This test case is different from the one above because the model would
       // not specify the exact value of c when the only constraint on it is that
       // c != 'B"
@@ -188,7 +199,7 @@ module SimpleTest {
   }
 }
 ".TrimStart();
-      var program = Utils.Parse(Setup.GetDafnyOptions(output), source, false);
+      var program = Utils.Parse(GetDafnyOptions(optionSettings, output), source, false);
       var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
       Assert.True(2 <= methods.Count);
       Assert.True(methods.All(m => m.MethodName == "SimpleTest.compareToB"));

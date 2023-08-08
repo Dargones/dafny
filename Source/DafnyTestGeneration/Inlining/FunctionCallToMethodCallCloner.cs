@@ -23,10 +23,10 @@ public class FunctionCallToMethodCallCloner: Cloner {
 
   private void Visit(TopLevelDecl d) {
     if (d is LiteralModuleDecl moduleDecl) {
-      moduleDecl.ModuleDef.TopLevelDecls.Iter(Visit);
+      moduleDecl.ModuleDef.TopLevelDecls.ForEach(Visit);
     } else if (d is TopLevelDeclWithMembers withMembers) {
-      withMembers.Members.OfType<Function>().Iter(Visit);
-      withMembers.Members.OfType<Method>().Iter(Visit);
+      withMembers.Members.OfType<Function>().ForEach(Visit);
+      withMembers.Members.OfType<Method>().ForEach(Visit);
     }
   }
 

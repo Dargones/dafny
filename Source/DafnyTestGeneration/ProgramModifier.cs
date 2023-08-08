@@ -1,4 +1,7 @@
-﻿#nullable disable
+﻿// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
+#nullable disable
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,9 +23,10 @@ namespace DafnyTestGeneration {
   /// condition is met (such as when a block is visited or a path is taken)
   /// </summary>
   public abstract class ProgramModifier {
-    internal static readonly string ImplPrefix = "Impl$$";
-    internal static readonly string CtorPostfix = "__ctor";
+    internal const string ImplPrefix = "Impl$$";
+    internal const string CtorPostfix = "__ctor";
     protected DafnyInfo DafnyInfo;
+    protected HashSet<string> TestEntries;
 
     /// <summary>
     /// Create tests and return the list of bpl test files
@@ -32,24 +36,19 @@ namespace DafnyTestGeneration {
       DafnyInfo dafnyInfo) {
       DafnyInfo = dafnyInfo;
       var options = dafnyInfo.Options;
-      var engine = ExecutionEngine.CreateWithoutSharedCache(options);
-      engine.CoalesceBlocks(program); // removes redundant basic blocks
-      program = new AnnotationVisitor(this, options).VisitProgram(program);
+      BlockCoalescer.CoalesceBlocks(program);
+      program = new AnnotationVisitor().VisitProgram(program);
       AddAxioms(options, program);
       program.Resolve(options);
       program.Typecheck(options);
-      // TODO: Uncomment when latest changes with Boogie are merged
-      engine.EliminateDeadVariables(program);
-      engine.CollectModSets(program);
-      engine.Inline(program);
-      program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && Utils.DeclarationHasAttribute(declaration, "inline"));
       program = new RemoveChecks(options).VisitProgram(program);
+      TestEntries = program.Implementations
+        .Where(implementation =>
+          Utils.DeclarationHasAttribute(implementation, TestGenerationOptions.TestEntryAttribute) &&
+          implementation.Name.StartsWith(ImplPrefix)).Select(implementation => implementation.VerboseName).ToHashSet();
       if (options.TestGenOptions.PrintBpl != null) {
         File.WriteAllText(options.TestGenOptions.PrintBpl,
           Utils.GetStringRepresentation(options, program));
-      }
-      if (options.TestGenOptions.PrintCfg != null) {
-        Utils.PrintCfg(options, program);
       }
       return GetModifications(program);
     }
@@ -57,10 +56,9 @@ namespace DafnyTestGeneration {
     protected abstract IEnumerable<ProgramModification> GetModifications(Program p);
 
     protected bool ImplementationIsToBeTested(Implementation impl) =>
-      // TODO: Remove second part of || clause once the latest changes to Boogie are merged
-      (Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestEntryAttribute)) &&
-      impl.Name.StartsWith(ImplPrefix) && !impl.Name.EndsWith(CtorPostfix) &&
-      !DafnyInfo.IsGhost(impl.VerboseName.Split(" ").First());
+      (Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestEntryAttribute) ||
+       Utils.DeclarationHasAttribute(impl, TestGenerationOptions.TestInlineAttribute)) &&
+      impl.Name.StartsWith(ImplPrefix) && !impl.Name.EndsWith(CtorPostfix);
 
     /// <summary>
     /// Add axioms necessary for counterexample generation to work efficiently
@@ -69,7 +67,7 @@ namespace DafnyTestGeneration {
       if (options.TestGenOptions.SeqLengthLimit == 0) {
         return;
       }
-      var limit = (uint)options.TestGenOptions.SeqLengthLimit;
+      var limit = options.TestGenOptions.SeqLengthLimit;
       Parser.Parse($"axiom (forall<T> y: Seq T :: " +
                    $"{{ Seq#Length(y) }} Seq#Length(y) <= {limit});",
         "", out var tmpProgram);
@@ -85,7 +83,7 @@ namespace DafnyTestGeneration {
       List<object> data, string separator = " | ", string key = "print") {
       // first insert separators between the things being printed
       var toPrint = new List<object>();
-      data.Iter(obj => toPrint.AddRange(new List<object> { obj, separator }));
+      data.ForEach(obj => toPrint.AddRange(new List<object> { obj, separator }));
       if (toPrint.Count() != 0) {
         toPrint.RemoveAt(toPrint.Count() - 1);
       }
@@ -123,25 +121,18 @@ namespace DafnyTestGeneration {
     /// (2)     the end of each block, to get execution trace.
     /// </summary>
     private class AnnotationVisitor : StandardVisitor {
-      private DafnyOptions options;
       private Implementation/*?*/ implementation;
-      private readonly ProgramModifier modifier;
-
-      public AnnotationVisitor(ProgramModifier modifier, DafnyOptions options) {
-        this.modifier = modifier;
-        this.options = options;
-      }
 
       public override Block VisitBlock(Block node) {
         var state = Utils.GetBlockId(node);
-        if (state == node.Label) {
-          node.cmds.Add(GetAssumePrintCmd(new List<object>(){implementation.Name + state}, "", "captureState"));
-          state = Utils.GetBlockId(node);
+        if (state == null) { // cannot map back to Dafny source location
+          return base.VisitBlock(node);
         }
         var data = new List<object>
           { "Block", implementation.Name, state };
         int afterPartition = node.cmds.FindIndex(cmd =>
           cmd is not AssumeCmd assumeCmd || assumeCmd.Attributes == null || assumeCmd.Attributes.Key != "partition");
+        afterPartition = afterPartition > -1 ? afterPartition : 0;
         node.cmds.Insert(afterPartition, GetAssumePrintCmd(data));
         return node;
       }
@@ -160,7 +151,6 @@ namespace DafnyTestGeneration {
         node.Blocks[0].cmds.Insert(0, GetAssumePrintCmd(data));
         if (Utils.DeclarationHasAttribute(node, TestGenerationOptions.TestInlineAttribute)) {
           // This method is inlined (and hence tested)
-          // TODO: Should you test that the argument exists and is an integer?
           var depthExpression = Utils.GetAttributeValue(node, TestGenerationOptions.TestInlineAttribute).First();
           var attribute = new QKeyValue(new Token(), "inline",
             new List<object>() { depthExpression }, null);
@@ -183,8 +173,8 @@ namespace DafnyTestGeneration {
     /// Replace assertions with assumptions and ensures with free ensures to
     /// alleviate the verification burden. Return a reresolved copy of the AST.
     /// </summary>
-    private class RemoveChecks : StandardVisitor {
-      private DafnyOptions options;
+    internal class RemoveChecks : StandardVisitor {
+      private readonly DafnyOptions options;
 
       public RemoveChecks(DafnyOptions options) {
         this.options = options;

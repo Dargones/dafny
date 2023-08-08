@@ -61,7 +61,6 @@ namespace Microsoft.Dafny {
       Contract.Requires(files != null);
       program = null;
 
-      var defaultClassFirst = options.VerifyAllModules;
       ErrorReporter reporter = options.DiagnosticsFormat switch {
         DafnyOptions.DiagnosticsFormats.PlainText => new ConsoleErrorReporter(options),
         DafnyOptions.DiagnosticsFormats.JSON => new JsonConsoleErrorReporter(options),
@@ -87,8 +86,8 @@ namespace Microsoft.Dafny {
         return null;
       }
 
-      var r = new Resolver(program);
-      LargeStackFactory.StartNew(() => r.ResolveProgram(program, CancellationToken.None)).Wait();
+      var programResolver = new ProgramResolver(program);
+      LargeStackFactory.StartNew(() => programResolver.Resolve(CancellationToken.None)).Wait();
       MaybePrintProgram(program, program.Options.DafnyPrintResolvedFile, true);
 
       if (program.Reporter.ErrorCountUntilResolver != 0) {
@@ -209,14 +208,14 @@ to also include a directory containing the `z3` executable.
           program.TopLevelDeclarations
             .Where(declaration => declaration is Implementation or Procedure && 
                                   (DeclarationHasAttribute(declaration, "inlineDepth") != null))
-            .Iter(declaration => declaration.Attributes = new QKeyValue(new Token(), "inline", 
+            .ForEach(declaration => declaration.Attributes = new QKeyValue(new Token(), "inline", 
               DeclarationHasAttribute(declaration, "inlineDepth"), declaration.Attributes));
           program.TopLevelDeclarations
             .Where(declaration => declaration is Implementation or Procedure && 
                                   (DeclarationHasAttribute(declaration, "entry") == null) && 
                                   (DeclarationHasAttribute(declaration, "inline") == null) &&
                                   !(declaration as NamedDeclaration).Name.StartsWith("$"))
-            .Iter(declaration => declaration.Attributes = new QKeyValue(new Token(), "inline", 
+            .ForEach(declaration => declaration.Attributes = new QKeyValue(new Token(), "inline", 
               new List<object>{new Boogie.LiteralExpr(new Token(), BigNum.ONE)}, declaration.Attributes));
           program.RemoveTopLevelDeclarations(declaration => declaration is Implementation or Procedure && (declaration as NamedDeclaration).Name.StartsWith("CheckWellformed$$"));
           engine.EliminateDeadVariables(program);

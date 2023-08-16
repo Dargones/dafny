@@ -30,7 +30,7 @@ namespace Microsoft.Dafny.LanguageServer.Language {
       this.telemetryPublisher = telemetryPublisher;
       this.logger = logger;
       programParser = options.Get(ServerCommand.UseCaching)
-        ? new CachingParser(innerParserLogger, fileSystem)
+        ? new CachingParser(innerParserLogger, fileSystem, telemetryPublisher)
         : new ProgramParser(innerParserLogger, fileSystem);
     }
 
@@ -44,10 +44,14 @@ namespace Microsoft.Dafny.LanguageServer.Language {
         foreach (var rootSourceUri in rootSourceUris) {
           try {
             dafnyFiles.Add(new DafnyFile(reporter.Options, rootSourceUri, fileSystem.ReadFile(rootSourceUri)));
+            if (logger.IsEnabled(LogLevel.Trace)) {
+              logger.LogTrace($"Parsing file with uri {rootSourceUri} and content\n{fileSystem.ReadFile(rootSourceUri).ReadToEnd()}");
+            }
           } catch (IOException) {
             logger.LogError($"Tried to parse file {rootSourceUri} that could not be found");
           }
         }
+
         return programParser.ParseFiles(compilation.Project.ProjectName, dafnyFiles, reporter, cancellationToken);
       }
       finally {

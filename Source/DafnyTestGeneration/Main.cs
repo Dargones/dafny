@@ -227,6 +227,7 @@ namespace DafnyTestGeneration {
         yield return method.ToString();
         methodsGenerated++;
       }
+
       yield return TestMethod.EmitSynthesizeMethods(dafnyInfo);
       yield return "}";
 

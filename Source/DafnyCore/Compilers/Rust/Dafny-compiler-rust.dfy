@@ -17,19 +17,20 @@ module {:extern "DCOMP"} DCOMP {
   }
 
   class COMP {
-    static method GenModule(mod: Module) returns (s: string) {
-      var body := GenModuleBody(mod.body);
+    static method GenModule(mod: Module, containingPath: seq<Ident>) returns (s: string) {
+      var body := GenModuleBody(mod.body, containingPath + [Ident.Ident(mod.name)]);
       s := "mod r#" + mod.name + " {\n" + body + "\n}";
     }
 
-    static method GenModuleBody(body: seq<ModuleItem>) returns (s: string) {
+    static method GenModuleBody(body: seq<ModuleItem>, containingPath: seq<Ident>) returns (s: string) {
       s := "";
       var i := 0;
       while i < |body| {
         var generated: string;
         match body[i] {
-          case Module(m) => generated := GenModule(m);
-          case Class(c) => generated := GenClass(c);
+          case Module(m) => generated := GenModule(m, containingPath);
+          case Class(c) => generated := GenClass(c, containingPath + [Ident.Ident(c.name)]);
+          case Trait(t) => generated := GenTrait(t, containingPath);
           case Newtype(n) => generated := GenNewtype(n);
           case Datatype(d) => generated := GenDatatype(d);
         }
@@ -43,16 +44,99 @@ module {:extern "DCOMP"} DCOMP {
       }
     }
 
-    static method GenClass(c: Class) returns (s: string) {
-      var selfPath := [Ident.Ident(c.name)];
-      var implBody := GenClassImplBody(c.body, Type.Path([], [], ResolvedType.Datatype(selfPath)), {});
+    static method GenClass(c: Class, path: seq<Ident>) returns (s: string) {
+      var implBody, traitBodies := GenClassImplBody(c.body, false, Type.Path(path, [], ResolvedType.Datatype(path)), {});
       implBody := "pub fn new() -> Self {\n" + "r#" + c.name + " {\n" + "" + "\n}\n}\n" + implBody;
       s := "pub struct r#" + c.name + " {\n" + "" +  "\n}" + "\n" + "impl r#" + c.name + " {\n" + implBody + "\n}";
+      if (|c.superClasses| > 0) {
+        var i := 0;
+        while i < |c.superClasses| {
+          var superClass := c.superClasses[i];
+          match superClass {
+            case Path(traitPath, typeArgs, Trait(_)) => {
+              var pathStr := GenPath(traitPath);
+              var typeArgs := GenTypeArgs(typeArgs, false, false);
+              var body := "";
+              if traitPath in traitBodies {
+                body := traitBodies[traitPath];
+              }
+
+              var genSelfPath := GenPath(path);
+              s := s + "\nimpl " + pathStr + typeArgs + " for ::std::rc::Rc<" + genSelfPath + "> {\n" + body + "\n}";
+            }
+            case _ => {}
+          }
+          i := i + 1;
+        }
+      }
+    }
+
+    static method GenTrait(t: Trait, containingPath: seq<Ident>) returns (s: string) {
+      var typeParamsSet := {};
+      var typeParams := "";
+      var tpI := 0;
+      if |t.typeParams| > 0 {
+        typeParams := "<";
+        while tpI < |t.typeParams| {
+          var tp := t.typeParams[tpI];
+          typeParamsSet := typeParamsSet + {tp};
+          var genTp := GenType(tp, false, false);
+          typeParams := typeParams + "r#" + genTp + ", ";
+          tpI := tpI + 1;
+        }
+        typeParams := typeParams + ">";
+      }
+
+      var fullPath := containingPath + [Ident.Ident(t.name)];
+      var implBody, _ := GenClassImplBody(t.body, true, Type.Path(fullPath, [], ResolvedType.Trait(fullPath)), typeParamsSet);
+      s := "pub trait r#" + t.name + typeParams + " {\n" + implBody +  "\n}";
     }
 
     static method GenNewtype(c: Newtype) returns (s: string) {
-      var underlyingType := GenType(c.base);
-      s := "pub type r#" + c.name + " =" + underlyingType +  ";\n";
+      var underlyingType := GenType(c.base, false, false);
+      s := "#[derive(Clone, PartialEq)]\npub struct r#" + c.name + "(pub " + underlyingType +  ");\n";
+      s := s + "impl ::std::default::Default for r#" + c.name + " {\n";
+      s := s + "fn default() -> Self {\n";
+
+      match c.witnessExpr {
+        case Some(e) => {
+          var eStr, _, _ := GenExpr(e, [], true);
+          s := s + "r#" + c.name + "(" + eStr + ")\n";
+        }
+        case None => {
+          s := s + "r#" + c.name + "(::std::default::Default::default())\n";
+        }
+      }
+
+      s := s + "}\n";
+      s := s + "}\n";
+      s := s + "impl ::dafny_runtime::DafnyPrint for r#" + c.name + " {\n";
+      s := s + "fn fmt_print(&self, __fmt_print_formatter: &mut ::std::fmt::Formatter, in_seq: bool) -> ::std::fmt::Result {\n";
+      s := s + "::dafny_runtime::DafnyPrint::fmt_print(&self.0, __fmt_print_formatter, in_seq)\n";
+      s := s + "}\n";
+      s := s + "}";
+
+      // inherit common traits
+      var ops := [("::std::ops::Add", "add"), ("::std::ops::Sub", "sub"), ("::std::ops::Mul", "mul"), ("::std::ops::Div", "div")];
+      var i := 0;
+      while i < |ops| {
+        var (traitName, methodName) := ops[i];
+        s := s + "impl " + traitName + "<r#" + c.name + "> for r#" + c.name;
+        s := s + " where " + underlyingType + ": " + traitName + "<" + underlyingType + ", Output = " + underlyingType + "> {\n";
+        s := s + "type Output = r#" + c.name + ";\n";
+        s := s + "fn " + methodName + "(self, other: r#" + c.name + ") -> r#" + c.name + " {\n";
+        s := s + "r#" + c.name + "(" + traitName + "::" + methodName + "(self.0, other.0))\n";
+        s := s + "}\n";
+        s := s + "}\n";
+        i := i + 1;
+      }
+
+      s := s + "impl ::std::cmp::PartialOrd<r#" + c.name + "> for r#" + c.name;
+      s := s + " where " + underlyingType + ": ::std::cmp::PartialOrd<" + underlyingType + "> {\n";
+      s := s + "fn partial_cmp(&self, other: &r#" + c.name + ") -> ::std::option::Option<::std::cmp::Ordering> {\n";
+      s := s + "self.0.partial_cmp(&other.0)\n";
+      s := s + "}\n";
+      s := s + "}\n";
     }
 
     static method GenDatatype(c: Datatype) returns (s: string) {
@@ -64,7 +148,7 @@ module {:extern "DCOMP"} DCOMP {
         while tpI < |c.typeParams| {
           var tp := c.typeParams[tpI];
           typeParamsSet := typeParamsSet + {tp};
-          var genTp := GenType(tp);
+          var genTp := GenType(tp, false, false);
           typeParams := typeParams + "r#" + genTp + ", ";
           tpI := tpI + 1;
         }
@@ -79,7 +163,7 @@ module {:extern "DCOMP"} DCOMP {
         var j := 0;
         while j < |ctor.args| {
           var formal := ctor.args[j];
-          var formalType := GenType(formal.typ);
+          var formalType := GenType(formal.typ, false, false);
           if c.isCo {
             ctorBody := ctorBody + "r#" + formal.name + ": ::dafny_runtime::LazyFieldWrapper<" + formalType + ">, ";
           } else {
@@ -95,7 +179,7 @@ module {:extern "DCOMP"} DCOMP {
       }
 
       var selfPath := [Ident.Ident(c.name)];
-      var implBody := GenClassImplBody(c.body, Type.Path([], [], ResolvedType.Datatype(selfPath)), typeParamsSet);
+      var implBody, traitBodies := GenClassImplBody(c.body, false, Type.Path([], [], ResolvedType.Datatype(selfPath)), typeParamsSet);
       i := 0;
       var emittedFields: set<string> := {};
       while i < |c.ctors| {
@@ -109,7 +193,7 @@ module {:extern "DCOMP"} DCOMP {
           if !(formal.name in emittedFields) {
             emittedFields := emittedFields + {formal.name};
 
-            var formalType := GenType(formal.typ);
+            var formalType := GenType(formal.typ, false, false);
             var methodBody := "match self {\n";
             var k := 0;
             while k < |c.ctors| {
@@ -159,7 +243,7 @@ module {:extern "DCOMP"} DCOMP {
           }
 
           var tp := c.typeParams[tpI];
-          var genTp := GenType(tp);
+          var genTp := GenType(tp, false, false);
           constrainedTypeParams := constrainedTypeParams + "r#" + genTp + ": Clone + ::std::cmp::PartialEq + ::dafny_runtime::DafnyPrint + ::std::default::Default + 'static";
           tpI := tpI + 1;
         }
@@ -168,14 +252,14 @@ module {:extern "DCOMP"} DCOMP {
 
       var enumBody := "#[derive(PartialEq)]\npub enum r#" + c.name + typeParams + " {\n" + ctors +  "\n}" + "\n" + "impl " + constrainedTypeParams + " r#" + c.name + typeParams + " {\n" + implBody + "\n}";
 
-      var printImpl := "impl " + constrainedTypeParams + " ::dafny_runtime::DafnyPrint for r#" + c.name + typeParams + " {\n" + "fn fmt_print(&self, f: &mut ::std::fmt::Formatter) -> std::fmt::Result {\n" + "match self {\n";
+      var printImpl := "impl " + constrainedTypeParams + " ::dafny_runtime::DafnyPrint for r#" + c.name + typeParams + " {\n" + "fn fmt_print(&self, __fmt_print_formatter: &mut ::std::fmt::Formatter, _in_seq: bool) -> std::fmt::Result {\n" + "match self {\n";
       i := 0;
       while i < |c.ctors| {
         var ctor := c.ctors[i];
         var ctorMatch := "r#" + ctor.name + " { ";
 
         var modulePrefix := if c.enclosingModule.id == "_module" then "" else c.enclosingModule.id + ".";
-        var printRhs := "write!(f, \"" + modulePrefix + c.name + "." + ctor.name + (if ctor.hasAnyArgs then "(\")?;" else "\")?;");
+        var printRhs := "write!(__fmt_print_formatter, \"" + modulePrefix + c.name + "." + ctor.name + (if ctor.hasAnyArgs then "(\")?;" else "\")?;");
 
         var j := 0;
         while j < |ctor.args| {
@@ -183,9 +267,9 @@ module {:extern "DCOMP"} DCOMP {
           ctorMatch := ctorMatch + formal.name + ", ";
 
           if (j > 0) {
-            printRhs := printRhs + "\nwrite!(f, \", \")?;";
+            printRhs := printRhs + "\nwrite!(__fmt_print_formatter, \", \")?;";
           }
-          printRhs := printRhs + "\n::dafny_runtime::DafnyPrint::fmt_print(" + formal.name + ", f)?;";
+          printRhs := printRhs + "\n::dafny_runtime::DafnyPrint::fmt_print(" + formal.name + ", __fmt_print_formatter, false)?;";
 
           j := j + 1;
         }
@@ -193,7 +277,7 @@ module {:extern "DCOMP"} DCOMP {
         ctorMatch := ctorMatch + "}";
 
         if (ctor.hasAnyArgs) {
-          printRhs := printRhs + "\nwrite!(f, \")\")?;";
+          printRhs := printRhs + "\nwrite!(__fmt_print_formatter, \")\")?;";
         }
 
         printRhs := printRhs + "\nOk(())";
@@ -239,29 +323,43 @@ module {:extern "DCOMP"} DCOMP {
       }
     }
 
-    static method GenType(c: Type) returns (s: string) {
+    static method GenTypeArgs(args: seq<Type>, inBinding: bool, inFn: bool) returns (s: string) {
+      s := "";
+      if |args| > 0 {
+        s := s + "<";
+        var i := 0;
+        while i < |args| {
+          if i > 0 {
+            s := s + ", ";
+          }
+
+          var genTp := GenType(args[i], inBinding, inFn);
+          s := s + genTp;
+          i := i + 1;
+        }
+        s := s + ">";
+      }
+    }
+
+    static method GenType(c: Type, inBinding: bool, inFn: bool) returns (s: string) {
       match c {
         case Path(p, args, resolved) => {
           s := GenPath(p);
 
-          if |args| > 0 {
-            s := s + "<";
-            var i := 0;
-            while i < |args| {
-              if i > 0 {
-                s := s + ", ";
-              }
-
-              var genTp := GenType(args[i]);
-              s := s + genTp;
-              i := i + 1;
-            }
-            s := s + ">";
-          }
+          var typeArgs := GenTypeArgs(args, inBinding, inFn);
+          s := s + typeArgs;
 
           match resolved {
             case Datatype(_) => {
               s := "::std::rc::Rc<" + s + ">";
+            }
+            case Trait(_) => {
+              if inBinding {
+                // impl trait in bindings is not stable
+                s := "_";
+              } else {
+                s := "impl " + s + "";
+              }
             }
             case Primitive => {}
           }
@@ -274,17 +372,68 @@ module {:extern "DCOMP"} DCOMP {
               s := s + " ";
             }
 
-            var generated := GenType(types[i]);
+            var generated := GenType(types[i], inBinding, inFn);
             s := s + generated + ",";
             i := i + 1;
           }
 
           s := s + ")";
         }
+        case Array(element) => {
+          var elemStr := GenType(element, inBinding, inFn);
+          s := "::std::vec::Vec<" + elemStr + ">";
+        }
+        case Seq(element) => {
+          var elemStr := GenType(element, inBinding, inFn);
+          s := "::std::vec::Vec<" + elemStr + ">";
+        }
+        case Set(element) => {
+          var elemStr := GenType(element, inBinding, inFn);
+          s := "::std::collections::HashSet<" + elemStr + ">";
+        }
+        case Multiset(element) => {
+          var elemStr := GenType(element, inBinding, inFn);
+          s := "::std::collections::HashMap<" + elemStr + ", u64>";
+        }
+        case Map(key, value) => {
+          var keyStr := GenType(key, inBinding, inFn);
+          var valueStr := GenType(value, inBinding, inFn);
+          s := "::std::collections::HashMap<" + keyStr + ", " + valueStr + ">";
+        }
+        case Arrow(args, result) => {
+          if inBinding {
+            s := "::dafny_runtime::FunctionWrapper<_>";
+          } else {
+            if inFn {
+              s := "::dafny_runtime::FunctionWrapper<Box<dyn Fn(";
+            } else {
+              s := "::dafny_runtime::FunctionWrapper<impl Fn(";
+            }
+
+            var i := 0;
+            while i < |args| {
+              if i > 0 {
+                s := s + ", ";
+              }
+
+              var generated := GenType(args[i], inBinding, true);
+              s := s + "&" + generated;
+              i := i + 1;
+            }
+
+            var resultType := GenType(result, inBinding, inFn);
+
+            if inFn {
+              s := s + ") -> " + resultType + " + 'static>>";
+            } else {
+              s := s + ") -> " + resultType + " + Clone + 'static>";
+            }
+          }
+        }
         case TypeArg(Ident(name)) => s := name;
         case Primitive(p) => {
           match p {
-            case String => s := "String";
+            case String => s := "Vec<char>";
             case Bool => s := "bool";
             case Char => s := "char";
           }
@@ -293,21 +442,43 @@ module {:extern "DCOMP"} DCOMP {
       }
     }
 
-    static method GenClassImplBody(body: seq<ClassItem>, enclosingType: Type, enclosingTypeParams: set<Type>) returns (s: string) {
+    static method GenClassImplBody(body: seq<ClassItem>, forTrait: bool, enclosingType: Type, enclosingTypeParams: set<Type>) returns (s: string, traitBodies: map<seq<Ident>, string>) {
       s := "";
+      traitBodies := map[];
+
       var i := 0;
       while i < |body| {
-        var generated: string;
         match body[i] {
-          case Method(m) => generated := GenMethod(m, enclosingType, enclosingTypeParams);
-          case Field(f) => generated := "TODO";
+          case Method(m) => {
+            match m.overridingPath {
+              case Some(p) => {
+                var existing := "";
+                if p in traitBodies {
+                  existing := traitBodies[p];
+                }
+
+                if |existing| > 0 {
+                  existing := existing + "\n";
+                }
+
+                var genMethod := GenMethod(m, true, enclosingType, enclosingTypeParams);
+                existing := existing + genMethod;
+
+                traitBodies := traitBodies + map[p := existing];
+              }
+              case None => {
+                var generated := GenMethod(m, forTrait, enclosingType, enclosingTypeParams);
+                s := s + generated;
+              }
+            }
+          }
+          case Field(f) => { /* TODO */ }
         }
 
-        if i > 0 {
+        if |s| > 0 {
           s := s + "\n";
         }
 
-        s := s + generated;
         i := i + 1;
       }
     }
@@ -317,7 +488,7 @@ module {:extern "DCOMP"} DCOMP {
       var i := 0;
       while i < |params| {
         var param := params[i];
-        var paramType := GenType(param.typ);
+        var paramType := GenType(param.typ, false, false);
         s := s + "r#" + param.name + ": &" + paramType;
 
         if i < |params| - 1 {
@@ -328,7 +499,7 @@ module {:extern "DCOMP"} DCOMP {
       }
     }
 
-    static method GenMethod(m: Method, enclosingType: Type, enclosingTypeParams: set<Type>) returns (s: string) {
+    static method GenMethod(m: Method, forTrait: bool, enclosingType: Type, enclosingTypeParams: set<Type>) returns (s: string) {
       var params := GenParams(m.params);
       var paramNames := [];
       var paramI := 0;
@@ -338,8 +509,12 @@ module {:extern "DCOMP"} DCOMP {
       }
 
       if (!m.isStatic) {
-        var enclosingTypeString := GenType(enclosingType);
-        params := "self: &" + enclosingTypeString + ", " + params;
+        if (forTrait) {
+          params := "&self" + ", " + params;
+        } else {
+          var enclosingTypeString := GenType(enclosingType, false, false);
+          params := "self: &" + enclosingTypeString + ", " + params;
+        }
       }
 
       var retType := if |m.outTypes| != 1 then "(" else "";
@@ -350,7 +525,7 @@ module {:extern "DCOMP"} DCOMP {
           retType := retType + ", ";
         }
 
-        var typeString := GenType(m.outTypes[typeI]);
+        var typeString := GenType(m.outTypes[typeI], false, false);
         retType := retType + typeString;
 
         typeI := typeI + 1;
@@ -360,7 +535,11 @@ module {:extern "DCOMP"} DCOMP {
         retType := retType + ")";
       }
 
-      s := "pub fn r#" + m.name;
+      if forTrait {
+        s := "fn r#" + m.name;
+      } else {
+        s := "pub fn r#" + m.name;
+      }
 
       var typeParamsFiltered := [];
       var typeParamI := 0;
@@ -382,7 +561,7 @@ module {:extern "DCOMP"} DCOMP {
             s := s + ", ";
           }
 
-          var typeString := GenType(typeParamsFiltered[i]);
+          var typeString := GenType(typeParamsFiltered[i], false, false);
           s := s + typeString + ": Clone + ::std::cmp::PartialEq + ::dafny_runtime::DafnyPrint + ::std::default::Default + 'static";
 
           i := i + 1;
@@ -391,43 +570,51 @@ module {:extern "DCOMP"} DCOMP {
         s := s + ">";
       }
 
-      var earlyReturn := "return;";
-      match m.outVars {
-        case Some(outVars) => {
-          earlyReturn := "return (";
-          var outI := 0;
-          while outI < |outVars| {
-            if outI > 0 {
-              earlyReturn := earlyReturn + ", ";
+      s := s + "(" + params + ") -> " + retType;
+
+      if m.hasBody {
+        var earlyReturn := "return;";
+        match m.outVars {
+          case Some(outVars) => {
+            earlyReturn := "return (";
+            var outI := 0;
+            while outI < |outVars| {
+              if outI > 0 {
+                earlyReturn := earlyReturn + ", ";
+              }
+
+              var outVar := outVars[outI];
+              earlyReturn := earlyReturn + "r#" + outVar.id;
+
+              outI := outI + 1;
             }
-
-            var outVar := outVars[outI];
-            earlyReturn := earlyReturn + "r#" + outVar.id;
-
-            outI := outI + 1;
+            earlyReturn := earlyReturn + ");";
           }
-          earlyReturn := earlyReturn + ");";
+          case None => {}
         }
-        case None => {}
-      }
 
-      var body := GenStmts(m.body, paramNames, earlyReturn);
-      match m.outVars {
-        case Some(outVars) => {
-          body := body + "\n" + earlyReturn;
+        var body, _ := GenStmts(m.body, paramNames, earlyReturn);
+        match m.outVars {
+          case Some(outVars) => {
+            body := body + "\n" + earlyReturn;
+          }
+          case None => {}
         }
-        case None => {}
-      }
 
-      s := s + "(" + params + ") -> " + retType + " {\n" + body + "\n}\n";
+        s := s + " {\n" + body + "\n}\n";
+      } else {
+        s := s + ";\n";
+      }
     }
 
-    static method GenStmts(stmts: seq<Statement>, params: seq<string>, earlyReturn: string) returns (generated: string) {
+    static method GenStmts(stmts: seq<Statement>, params: seq<string>, earlyReturn: string) returns (generated: string, readIdents: set<string>) {
       generated := "";
+      readIdents := {};
       var i := 0;
       while i < |stmts| {
         var stmt := stmts[i];
-        var stmtString := GenStmt(stmt, params, earlyReturn);
+        var stmtString, recIdents := GenStmt(stmt, params, earlyReturn);
+        readIdents := readIdents + recIdents;
 
         if i > 0 {
           generated := generated + "\n";
@@ -438,33 +625,43 @@ module {:extern "DCOMP"} DCOMP {
       }
     }
 
-    static method GenStmt(stmt: Statement, params: seq<string>, earlyReturn: string) returns (generated: string) {
+    static method GenStmt(stmt: Statement, params: seq<string>, earlyReturn: string) returns (generated: string, readIdents: set<string>) {
       match stmt {
         case DeclareVar(name, typ, Some(expression)) => {
-          var expr, _, _ := GenExpr(expression, params, true);
-          var typeString := GenType(typ);
+          var expr, _, recIdents := GenExpr(expression, params, true);
+          var typeString := GenType(typ, true, false);
           generated := "let mut r#" + name + ": " + typeString + " = " + expr + ";";
+          readIdents := recIdents;
         }
         case DeclareVar(name, typ, None) => {
-          var typeString := GenType(typ);
+          var typeString := GenType(typ, true, false);
           generated := "let mut r#" + name + ": " + typeString + ";";
+          readIdents := {};
         }
         case Assign(name, expression) => {
-          var expr, _, _ := GenExpr(expression, params, true);
+          var expr, _, recIdents := GenExpr(expression, params, true);
           generated := "r#" + name + " = " + expr + ";";
+          readIdents := recIdents;
         }
         case If(cond, thn, els) => {
-          var condString, _, _ := GenExpr(cond, params, true);
-          var thnString := GenStmts(thn, params, earlyReturn);
-          var elsString := GenStmts(els, params, earlyReturn);
+          var condString, _, recIdents := GenExpr(cond, params, true);
+          readIdents := recIdents;
+          var thnString, thnIdents := GenStmts(thn, params, earlyReturn);
+          readIdents := readIdents + thnIdents;
+          var elsString, elsIdents := GenStmts(els, params, earlyReturn);
+          readIdents := readIdents + elsIdents;
           generated := "if " + condString + " {\n" + thnString + "\n} else {\n" + elsString + "\n}";
         }
         case While(cond, body) => {
-          var condString, _, _ := GenExpr(cond, params, true);
-          var bodyString := GenStmts(body, params, earlyReturn);
+          var condString, _, recIdents := GenExpr(cond, params, true);
+          readIdents := recIdents;
+          var bodyString, bodyIdents := GenStmts(body, params, earlyReturn);
+          readIdents := readIdents + bodyIdents;
           generated := "while " + condString + " {\n" + bodyString + "\n}";
         }
         case Call(on, name, typeArgs, args, maybeOutVars) => {
+          readIdents := {};
+
           var typeArgString := "";
           if (|typeArgs| >= 1) {
             var typeI := 0;
@@ -474,7 +671,7 @@ module {:extern "DCOMP"} DCOMP {
                 typeArgString := typeArgString + ", ";
               }
 
-              var typeString := GenType(typeArgs[typeI]);
+              var typeString := GenType(typeArgs[typeI], false, false);
               typeArgString := typeArgString + typeString;
 
               typeI := typeI + 1;
@@ -489,13 +686,15 @@ module {:extern "DCOMP"} DCOMP {
               argString := argString + ", ";
             }
 
-            var argExpr, isOwned, _ := GenExpr(args[i], params, false);
+            var argExpr, isOwned, argIdents := GenExpr(args[i], params, false);
             argString := argString + (if isOwned then "&" else "") + argExpr;
+            readIdents := readIdents + argIdents;
 
             i := i + 1;
           }
 
-          var enclosingString, _, _ := GenExpr(on, params, true);
+          var enclosingString, _, enclosingIdents := GenExpr(on, params, true);
+          readIdents := readIdents + enclosingIdents;
           match on {
             case Companion(_) => {
               enclosingString := enclosingString + "::";
@@ -534,15 +733,22 @@ module {:extern "DCOMP"} DCOMP {
             enclosingString + "r#" + name + typeArgString + "(" + argString + ");";
         }
         case Return(expr) => {
-          var exprString, _, _ := GenExpr(expr, params, true);
+          var exprString, _, recIdents := GenExpr(expr, params, true);
+          readIdents := recIdents;
           generated := "return " + exprString + ";";
         }
         case EarlyReturn() => {
           generated := earlyReturn;
+          readIdents := {};
+        }
+        case Halt() => {
+          generated := "panic!(\"Halt\");";
+          readIdents := {};
         }
         case Print(e) => {
-          var printedExpr, isOwned, _ := GenExpr(e, params, false);
+          var printedExpr, isOwned, recIdents := GenExpr(e, params, false);
           generated := "print!(\"{}\", ::dafny_runtime::DafnyPrintWrapper(" + (if isOwned then "&" else "") + printedExpr + "));";
+          readIdents := recIdents;
         }
       }
     }
@@ -576,7 +782,17 @@ module {:extern "DCOMP"} DCOMP {
         }
         case Literal(StringLiteral(l)) => {
           // TODO(shadaj): handle unicode properly
-          s := "\"" + l + "\".to_string()";
+          s := "\"" + l + "\".chars().collect::<Vec<char>>()";
+          isOwned := true;
+          readIdents := {};
+        }
+        case Literal(CharLiteral(c)) => {
+          s := "::std::primitive::char::from_u32(" + natToString(c as nat) + ").unwrap()";
+          isOwned := true;
+          readIdents := {};
+        }
+        case Literal(Null) => {
+          s := "None";
           isOwned := true;
           readIdents := {};
         }
@@ -649,6 +865,20 @@ module {:extern "DCOMP"} DCOMP {
           s := s + "))";
           isOwned := true;
         }
+        case NewArray(dims) => {
+          var i := |dims| - 1;
+          s := "::std::default::Default::default()";
+          readIdents := {};
+          while i >= 0 {
+            var recursiveGen, _, recIdents := GenExpr(dims[i], params, true);
+            s := "vec![" + s + "; (" + recursiveGen + ") as usize]";
+            readIdents := readIdents + recIdents;
+
+            i := i - 1;
+          }
+
+          isOwned := true;
+        }
         case DatatypeValue(path, variant, isCo, values) => {
           var path := GenPath(path);
           s := "::std::rc::Rc::new(" + path + "::r#" + variant;
@@ -665,7 +895,6 @@ module {:extern "DCOMP"} DCOMP {
             if isCo {
               var recursiveGen, _, recIdents := GenExpr(value, [], true);
               readIdents := readIdents + recIdents;
-
               var allReadCloned := "";
               while recIdents != {} decreases recIdents {
                 var next: string :| next in recIdents;
@@ -681,6 +910,61 @@ module {:extern "DCOMP"} DCOMP {
             i := i + 1;
           }
           s := s + " })";
+          isOwned := true;
+        }
+        case NewtypeValue(tpe, expr) => {
+          var typeString := GenType(tpe, false, false);
+          var recursiveGen, _, recIdents := GenExpr(expr, params, true);
+          s := typeString + "(" + recursiveGen + ")";
+          isOwned := true;
+          readIdents := recIdents;
+        }
+        case SeqValue(exprs) => {
+          var generatedValues := [];
+          readIdents := {};
+          var i := 0;
+          while i < |exprs| {
+            var recursiveGen, _, recIdents := GenExpr(exprs[i], params, true);
+            generatedValues := generatedValues + [recursiveGen];
+            readIdents := readIdents + recIdents;
+            i := i + 1;
+          }
+
+          s := "vec![";
+          i := 0;
+          while i < |generatedValues| {
+            if i > 0 {
+              s := s + ", ";
+            }
+            s := s + generatedValues[i];
+            i := i + 1;
+          }
+          s := s + "]";
+
+          isOwned := true;
+        }
+        case SetValue(exprs) => {
+          var generatedValues := [];
+          readIdents := {};
+          var i := 0;
+          while i < |exprs| {
+            var recursiveGen, _, recIdents := GenExpr(exprs[i], params, true);
+            generatedValues := generatedValues + [recursiveGen];
+            readIdents := readIdents + recIdents;
+            i := i + 1;
+          }
+
+          s := "vec![";
+          i := 0;
+          while i < |generatedValues| {
+            if i > 0 {
+              s := s + ", ";
+            }
+            s := s + generatedValues[i];
+            i := i + 1;
+          }
+          s := s + "].into_iter().collect::<std::collections::HashSet<_>>()";
+
           isOwned := true;
         }
         case This() => {
@@ -703,12 +987,58 @@ module {:extern "DCOMP"} DCOMP {
           isOwned := fOwned;
           readIdents := recIdentsCond + recIdentsT + recIdentsF;
         }
+        case UnOp(Not, e) => {
+          var recursiveGen, _, recIdents := GenExpr(e, params, true);
+          s := "!(" + recursiveGen + ")";
+          isOwned := true;
+          readIdents := recIdents;
+        }
+        case UnOp(BitwiseNot, e) => {
+          var recursiveGen, _, recIdents := GenExpr(e, params, true);
+          s := "~(" + recursiveGen + ")";
+          isOwned := true;
+          readIdents := recIdents;
+        }
+        case UnOp(Cardinality, e) => {
+          var recursiveGen, _, recIdents := GenExpr(e, params, false);
+          s := "(" + recursiveGen + ").len()";
+          isOwned := true;
+          readIdents := recIdents;
+        }
         case BinOp(op, l, r) => {
           var left, _, recIdentsL := GenExpr(l, params, true);
           var right, _, recIdentsR := GenExpr(r, params, true);
           s := "(" + left + " " + op + " " + right + ")";
           isOwned := true;
           readIdents := recIdentsL + recIdentsR;
+        }
+        case SelectFn(on, field, isDatatype, isStatic, arity) => {
+          var onString, onOwned, recIdents := GenExpr(on, params, false);
+
+          if isStatic {
+            s := onString + "::" + field;
+          } else {
+            s := "{\n";
+            s := s + "let callTarget = (" + onString + (if onOwned then ")" else ").clone()") + ";\n";
+            var args := "";
+            var i := 0;
+            while i < arity {
+              if i > 0 {
+                args := args + ", ";
+              }
+              args := args + "arg" + natToString(i);
+              i := i + 1;
+            }
+            s := s + "move |" + args + "| {\n";
+            s := s + "callTarget." + field + "(" + args + ")\n";
+            s := s + "}\n";
+            s := s + "}";
+          }
+
+          s := "::dafny_runtime::FunctionWrapper(" + s + ")";
+
+          isOwned := true;
+          readIdents := recIdents;
         }
         case Select(on, field, isDatatype) => {
           var onString, _, recIdents := GenExpr(on, params, false);
@@ -757,7 +1087,7 @@ module {:extern "DCOMP"} DCOMP {
                 typeArgString := typeArgString + ", ";
               }
 
-              var typeString := GenType(typeArgs[typeI]);
+              var typeString := GenType(typeArgs[typeI], false, false);
               typeArgString := typeArgString + typeString;
 
               typeI := typeI + 1;
@@ -790,7 +1120,76 @@ module {:extern "DCOMP"} DCOMP {
             }
           }
 
-          s := enclosingString + "r#" + name + typeArgString + "(" + argString + ")";
+          s := enclosingString + "r#" + name.id + typeArgString + "(" + argString + ")";
+          isOwned := true;
+        }
+        case Lambda(params, body) => {
+          var paramNames := [];
+          var i := 0;
+          while i < |params| {
+            paramNames := paramNames + [params[i].name];
+            i := i + 1;
+          }
+
+          var recursiveGen, recIdents := GenStmts(body, paramNames, "");
+          readIdents := {};
+          var allReadCloned := "";
+          while recIdents != {} decreases recIdents {
+            var next: string :| next in recIdents;
+
+            if !(next in paramNames) {
+              allReadCloned := allReadCloned + "let r#" + next + " = r#" + next + ".clone();\n";
+              readIdents := readIdents + {next};
+            }
+
+            recIdents := recIdents - {next};
+          }
+
+          var paramsString := "";
+          i := 0;
+          while i < |params| {
+            if i > 0 {
+              paramsString := paramsString + ", ";
+            }
+
+            var typStr := GenType(params[i].typ, false, true);
+
+            paramsString := paramsString + params[i].name + ": &" + typStr;
+            i := i + 1;
+          }
+
+          s := "::dafny_runtime::FunctionWrapper({\n" + allReadCloned + "Box::new(move |" + paramsString + "| {\n" + recursiveGen + "\n})})";
+          isOwned := true;
+        }
+        case IIFE(name, tpe, value, iifeBody) => {
+          var valueGen, valueOwned, recIdents := GenExpr(value, params, false);
+          readIdents := recIdents;
+          var valueTypeGen := GenType(tpe, false, true);
+          var bodyGen, bodyOwned, bodyIdents := GenExpr(iifeBody, params + if valueOwned then [] else [name.id], mustOwn);
+          readIdents := readIdents + bodyIdents;
+
+          s := "{\nlet r#" + name.id + ": " + (if valueOwned then "" else "&") + valueTypeGen + " = " + valueGen + ";\n" + bodyGen + "\n}";
+          isOwned := bodyOwned;
+        }
+        case Apply(func, args) => {
+          var funcString, _, recIdents := GenExpr(func, params, false);
+          readIdents := recIdents;
+
+          var argString := "";
+          var i := 0;
+          while i < |args| {
+            if i > 0 {
+              argString := argString + ", ";
+            }
+
+            var argExpr, isOwned, recIdents := GenExpr(args[i], params, false);
+            readIdents := readIdents + recIdents;
+            argString := argString + (if isOwned then "&" else "") + argExpr;
+
+            i := i + 1;
+          }
+
+          s := "((" + funcString + ").0" + "(" + argString + "))";
           isOwned := true;
         }
         case TypeTest(on, dType, variant) => {
@@ -810,7 +1209,7 @@ module {:extern "DCOMP"} DCOMP {
       var i := 0;
       while i < |p| {
         var generated: string;
-        generated := GenModule(p[i]);
+        generated := GenModule(p[i], []);
 
         if i > 0 {
           s := s + "\n";

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Dafny;
 using DAST;
+using Microsoft.Dafny.Compilers;
 
 namespace Microsoft.Dafny.Compilers {
 
@@ -25,7 +26,7 @@ namespace Microsoft.Dafny.Compilers {
     }
   }
 
-  class ModuleBuilder : ClassContainer, NewtypeContainer, DatatypeContainer {
+  class ModuleBuilder : ClassContainer, TraitContainer, NewtypeContainer, DatatypeContainer {
     readonly ModuleContainer parent;
     readonly string name;
     readonly List<ModuleItem> body = new();
@@ -41,6 +42,10 @@ namespace Microsoft.Dafny.Compilers {
 
     public void AddClass(Class item) {
       body.Add((ModuleItem)ModuleItem.create_Class(item));
+    }
+
+    public void AddTrait(Trait item) {
+      body.Add((ModuleItem)ModuleItem.create_Trait(item));
     }
 
     public void AddNewtype(Newtype item) {
@@ -60,19 +65,21 @@ namespace Microsoft.Dafny.Compilers {
   interface ClassContainer {
     void AddClass(Class item);
 
-    public ClassBuilder Class(string name) {
-      return new ClassBuilder(this, name);
+    public ClassBuilder Class(string name, List<DAST.Type> superClasses) {
+      return new ClassBuilder(this, name, superClasses);
     }
   }
 
   class ClassBuilder : ClassLike {
     readonly ClassContainer parent;
     readonly string name;
+    readonly List<DAST.Type> superClasses;
     readonly List<ClassItem> body = new();
 
-    public ClassBuilder(ClassContainer parent, string name) {
+    public ClassBuilder(ClassContainer parent, string name, List<DAST.Type> superClasses) {
       this.parent = parent;
       this.name = name;
+      this.superClasses = superClasses;
     }
 
     public void AddMethod(DAST.Method item) {
@@ -84,7 +91,57 @@ namespace Microsoft.Dafny.Compilers {
     }
 
     public object Finish() {
-      parent.AddClass((Class)Class.create(Sequence<Rune>.UnicodeFromString(this.name), Sequence<ClassItem>.FromArray(body.ToArray())));
+      parent.AddClass((Class)Class.create(
+        Sequence<Rune>.UnicodeFromString(this.name),
+        Sequence<DAST.Type>.FromArray(this.superClasses.ToArray()),
+        Sequence<ClassItem>.FromArray(body.ToArray())
+      ));
+      return parent;
+    }
+  }
+
+  interface TraitContainer {
+    void AddTrait(Trait item);
+
+    public TraitBuilder Trait(string name, List<DAST.Type> typeParams) {
+      return new TraitBuilder(this, name, typeParams);
+    }
+  }
+
+  class TraitBuilder : ClassLike {
+    readonly TraitContainer parent;
+    readonly string name;
+    readonly List<DAST.Type> typeParams;
+    readonly List<ClassItem> body = new();
+
+    public TraitBuilder(TraitContainer parent, string name, List<DAST.Type> typeParams) {
+      this.parent = parent;
+      this.name = name;
+      this.typeParams = typeParams;
+    }
+
+    public void AddMethod(DAST.Method item) {
+      // remove existing method with the same name, because we're going to define an implementation
+      for (int i = 0; i < body.Count; i++) {
+        if (body[i].is_Method && body[i].dtor_Method_a0.dtor_name.Equals(item.dtor_name)) {
+          body.RemoveAt(i);
+          break;
+        }
+      }
+
+      body.Add((ClassItem)ClassItem.create_Method(item));
+    }
+
+    public void AddField(DAST.Formal item) {
+      throw new NotImplementedException();
+    }
+
+    public object Finish() {
+      parent.AddTrait((Trait)Trait.create(
+        Sequence<Rune>.UnicodeFromString(this.name),
+        Sequence<DAST.Type>.FromArray(typeParams.ToArray()),
+        Sequence<ClassItem>.FromArray(body.ToArray()))
+      );
       return parent;
     }
   }
@@ -92,8 +149,8 @@ namespace Microsoft.Dafny.Compilers {
   interface NewtypeContainer {
     void AddNewtype(Newtype item);
 
-    public NewtypeBuilder Newtype(string name, DAST.Type baseType) {
-      return new NewtypeBuilder(this, name, baseType);
+    public NewtypeBuilder Newtype(string name, DAST.Type baseType, DAST.Expression witness) {
+      return new NewtypeBuilder(this, name, baseType, witness);
     }
   }
 
@@ -101,11 +158,13 @@ namespace Microsoft.Dafny.Compilers {
     readonly NewtypeContainer parent;
     readonly string name;
     readonly DAST.Type baseType;
+    readonly DAST.Expression witness;
 
-    public NewtypeBuilder(NewtypeContainer parent, string name, DAST.Type baseType) {
+    public NewtypeBuilder(NewtypeContainer parent, string name, DAST.Type baseType, DAST.Expression witness) {
       this.parent = parent;
       this.name = name;
       this.baseType = baseType;
+      this.witness = witness;
     }
 
     public void AddMethod(DAST.Method item) {
@@ -117,7 +176,11 @@ namespace Microsoft.Dafny.Compilers {
     }
 
     public object Finish() {
-      parent.AddNewtype((Newtype)Newtype.create(Sequence<Rune>.UnicodeFromString(this.name), this.baseType));
+      parent.AddNewtype((Newtype)Newtype.create(
+        Sequence<Rune>.UnicodeFromString(this.name),
+        this.baseType,
+        this.witness == null ? Optional<DAST._IExpression>.create_None() : Optional<DAST._IExpression>.create_Some(this.witness)
+      ));
       return parent;
     }
   }
@@ -174,8 +237,15 @@ namespace Microsoft.Dafny.Compilers {
 
     void AddField(DAST.Formal item);
 
-    public MethodBuilder Method(bool isStatic, string name, List<DAST.Type> typeArgs, List<DAST.Formal> params_, List<DAST.Type> outTypes, List<ISequence<Rune>> outVars) {
-      return new MethodBuilder(this, isStatic, name, typeArgs, params_, outTypes, outVars);
+    public MethodBuilder Method(
+      bool isStatic, bool hasBody,
+      ISequence<ISequence<Rune>> overridingPath,
+      string name,
+      List<DAST.Type> typeArgs,
+      List<DAST.Formal> params_,
+      List<DAST.Type> outTypes, List<ISequence<Rune>> outVars
+    ) {
+      return new MethodBuilder(this, isStatic, hasBody, overridingPath, name, typeArgs, params_, outTypes, outVars);
     }
 
     public object Finish();
@@ -185,15 +255,27 @@ namespace Microsoft.Dafny.Compilers {
     readonly ClassLike parent;
     readonly string name;
     readonly bool isStatic;
+    readonly bool hasBody;
+    readonly ISequence<ISequence<Rune>> overridingPath;
     readonly List<DAST.Type> typeArgs;
     readonly List<DAST.Formal> params_;
     readonly List<DAST.Type> outTypes;
     readonly List<ISequence<Rune>> outVars;
     readonly List<object> body = new();
 
-    public MethodBuilder(ClassLike parent, bool isStatic, string name, List<DAST.Type> typeArgs, List<DAST.Formal> params_, List<DAST.Type> outTypes, List<ISequence<Rune>> outVars) {
+    public MethodBuilder(
+      ClassLike parent,
+      bool isStatic, bool hasBody,
+      ISequence<ISequence<Rune>> overridingPath,
+      string name,
+      List<DAST.Type> typeArgs,
+      List<DAST.Formal> params_,
+      List<DAST.Type> outTypes, List<ISequence<Rune>> outVars
+    ) {
       this.parent = parent;
       this.isStatic = isStatic;
+      this.hasBody = hasBody;
+      this.overridingPath = overridingPath;
       this.name = name;
       this.typeArgs = typeArgs;
       this.params_ = params_;
@@ -221,6 +303,8 @@ namespace Microsoft.Dafny.Compilers {
 
       return (DAST.Method)DAST.Method.create(
         isStatic,
+        hasBody,
+        overridingPath != null ? Optional<ISequence<ISequence<Rune>>>.create_Some(overridingPath) : Optional<ISequence<ISequence<Rune>>>.create_None(),
         Sequence<Rune>.UnicodeFromString(this.name),
         Sequence<DAST.Type>.FromArray(typeArgs.ToArray()),
         Sequence<DAST.Formal>.FromArray(params_.ToArray()),
@@ -677,6 +761,18 @@ namespace Microsoft.Dafny.Compilers {
       return ret;
     }
 
+    LambdaExprBuilder Lambda(List<DAST.Formal> formals) {
+      var ret = new LambdaExprBuilder(formals);
+      AddBuildable(ret);
+      return ret;
+    }
+
+    IIFEExprBuilder IIFE(string name, DAST.Type tpe) {
+      var ret = new IIFEExprBuilder(name, tpe);
+      AddBuildable(ret);
+      return ret;
+    }
+
     protected static void RecursivelyBuild(List<object> body, List<DAST.Expression> builtExprs) {
       foreach (var maybeBuilt in body) {
         if (maybeBuilt is DAST.Expression built) {
@@ -786,4 +882,109 @@ namespace Microsoft.Dafny.Compilers {
     }
   }
 
+}
+
+class LambdaExprBuilder : StatementContainer, BuildableExpr {
+  readonly List<DAST.Formal> formals;
+  readonly List<object> body = new();
+
+  public LambdaExprBuilder(List<DAST.Formal> formals) {
+    this.formals = formals;
+  }
+
+  public void AddStatement(DAST.Statement item) {
+    body.Add(item);
+  }
+
+  public void AddBuildable(BuildableStatement item) {
+    body.Add(item);
+  }
+
+  public List<object> ForkList() {
+    var ret = new List<object>();
+    body.Add(ret);
+    return ret;
+  }
+
+  public DAST.Expression Build() {
+    var builtBody = new List<DAST.Statement>();
+    StatementContainer.RecursivelyBuild(body, builtBody);
+
+    return (DAST.Expression)DAST.Expression.create_Lambda(
+      Sequence<DAST.Formal>.FromArray(formals.ToArray()),
+      Sequence<DAST.Statement>.FromArray(builtBody.ToArray())
+    );
+  }
+}
+
+class IIFEExprBuilder : ExprContainer, BuildableExpr {
+  readonly string name;
+  readonly DAST.Type tpe;
+
+  object body = null;
+  public object value = null;
+
+  public IIFEExprBuilder(string name, DAST.Type tpe) {
+    this.name = name;
+    this.tpe = tpe;
+  }
+
+  public IIFEExprRhs RhsBuilder() {
+    return new IIFEExprRhs(this);
+  }
+
+  public void AddExpr(DAST.Expression item) {
+    if (body != null) {
+      throw new InvalidOperationException();
+    } else {
+      body = item;
+    }
+  }
+
+  public void AddBuildable(BuildableExpr item) {
+    if (body != null) {
+      throw new InvalidOperationException();
+    } else {
+      body = item;
+    }
+  }
+
+  public DAST.Expression Build() {
+    var builtBody = new List<DAST.Expression>();
+    ExprContainer.RecursivelyBuild(new List<object> { body }, builtBody);
+
+    var builtValue = new List<DAST.Expression>();
+    ExprContainer.RecursivelyBuild(new List<object> { value }, builtValue);
+
+    return (DAST.Expression)DAST.Expression.create_IIFE(
+      Sequence<Rune>.UnicodeFromString(name),
+      tpe,
+      builtValue[0],
+      builtBody[0]
+    );
+  }
+}
+
+class IIFEExprRhs : ExprContainer {
+  readonly IIFEExprBuilder parent;
+
+  public IIFEExprRhs(IIFEExprBuilder parent) {
+    this.parent = parent;
+  }
+
+  public void AddExpr(DAST.Expression item) {
+    if (parent.value != null) {
+      throw new InvalidOperationException();
+    } else {
+      parent.value = item;
+    }
+  }
+
+  public void AddBuildable(BuildableExpr item) {
+    if (parent.value != null) {
+      throw new InvalidOperationException();
+    } else {
+      parent.value = item;
+    }
+  }
 }

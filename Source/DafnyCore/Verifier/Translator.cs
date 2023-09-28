@@ -9537,7 +9537,7 @@ namespace Microsoft.Dafny {
       Bpl.Variable resType = new Bpl.Formal(e.tok, new Bpl.TypedIdent(e.tok, Bpl.TypedIdent.NoName, Bpl.Type.Bool),
         false);
       List<Variable> formals = info.GAsVars(this, true, out var ante, null);
-      var canCallFunction = new Bpl.Function(e.tok, info.CanCallFunctionName(), formals, resType);
+      var canCallFunction = new Bpl.Function(e.tok, info.CanCallFunctionName(formals.Count), formals, resType);
 
       if (InsertChecksums) {
         InsertChecksum(e.Body, canCallFunction);
@@ -9587,7 +9587,7 @@ namespace Microsoft.Dafny {
         i++;
       }
 
-      var canCall = FunctionCall(e.tok, info.CanCallFunctionName(), Bpl.Type.Bool, gExprs);
+      var canCall = FunctionCall(e.tok, info.CanCallFunctionName(gExprs.Count), Bpl.Type.Bool, gExprs);
       var p = Substitute(e.RHSs[0], receiverReplacement, substMap);
       Bpl.Expr ax = Bpl.Expr.Imp(canCall, BplAnd(antecedent, etranCC.TrExpr(p)));
       ax = BplForall(gg, tr, ax);
@@ -9682,10 +9682,10 @@ namespace Microsoft.Dafny {
         foreach (var v in FV_Exprs) {
           gExprs.Add(etran.TrExpr(v));
         }
-        return FunctionCall(Tok, CanCallFunctionName(), Bpl.Type.Bool, gExprs);
+        return FunctionCall(Tok, CanCallFunctionName(gExprs.Count), Bpl.Type.Bool, gExprs);
       }
-      public string CanCallFunctionName() {
-        return string.Format("$let#{0}$canCall", LetId);
+      public string CanCallFunctionName(int Arity) {
+        return string.Format("$let#{0}${1}$canCall", LetId, Arity);
       }
       public Bpl.Expr HeapExpr(Translator translator, bool old) {
         Contract.Requires(translator != null);

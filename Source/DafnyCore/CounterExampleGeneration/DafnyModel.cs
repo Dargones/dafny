@@ -1,17 +1,18 @@
 // Copyright by the contributors to the Dafny Project
 // SPDX-License-Identifier: MIT
 
-
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.BaseTypes;
 using Microsoft.Boogie;
 
-namespace Microsoft.Dafny.LanguageServer.CounterExampleGeneration {
+namespace Microsoft.Dafny {
 
   /// <summary>
   /// A wrapper around Boogie's Model class that allows extracting
@@ -95,6 +96,24 @@ namespace Microsoft.Dafny.LanguageServer.CounterExampleGeneration {
         }
         sn.LoopGuards = LoopGuards.ToList();
       }
+    }
+    
+    /// <summary>
+    /// Convert the counterexample to a string
+    /// </summary>
+    public override string ToString() {
+      var counterexample = new StringBuilder();
+      if (LoopGuards.Count > 0) {
+        counterexample.AppendLine("Add these ghost variables to support counterexamples: ");
+        foreach (var loopGuard in LoopGuards) {
+          counterexample.AppendLine($"ghost var {loopGuard} : bool := false;");
+        }
+      }
+      foreach (var state in States.Where(state => state.StateContainsPosition())) {
+        counterexample.AppendLine($"Add the assumption below at the following location: {state.FullStateName}:");
+        counterexample.AppendLine(state.AsAssumption().ToString());
+      }
+      return counterexample.ToString();
     }
 
     public void AssignConcretePrimitiveValues() {

@@ -478,7 +478,12 @@ public class Compilation : IDisposable {
     result.CounterExamples.Sort(new CounterexampleComparer());
     foreach (var counterExample in result.CounterExamples) //.OrderBy(d => d.GetLocation()))
     {
-      errorReporter.ReportBoogieError(counterExample.CreateErrorInformation(outcome, options.ForceBplErrors));
+      var errorInformation = counterExample.CreateErrorInformation(outcome, options.ForceBplErrors);
+      errorReporter.ReportBoogieError(errorInformation);
+      if (options.ExtractCounterexample) {
+        var dafnyModel = new DafnyModel(counterExample.Model, options);
+        errorReporter.ReportCounterexample(options, dafnyModel.ToString(), errorInformation);
+      }
     }
 
     // This reports problems that are not captured by counter-examples, like a time-out

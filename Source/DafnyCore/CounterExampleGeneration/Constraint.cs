@@ -1,10 +1,11 @@
 // Copyright by the contributors to the Dafny Project
 // SPDX-License-Identifier: MIT
 
+#nullable enable
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Microsoft.Dafny.LanguageServer.CounterExampleGeneration;
+namespace Microsoft.Dafny;
 
 /// <summary>
 /// This class represents constraints over partial values in the counterexample model.

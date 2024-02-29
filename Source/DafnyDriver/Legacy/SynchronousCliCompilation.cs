@@ -24,7 +24,6 @@ using Microsoft.Boogie;
 using Bpl = Microsoft.Boogie;
 using System.Diagnostics;
 using Microsoft.Dafny.Compilers;
-using Microsoft.Dafny.LanguageServer.CounterExampleGeneration;
 using Microsoft.Dafny.Plugins;
 using VC;
 
@@ -323,7 +322,7 @@ namespace Microsoft.Dafny {
         Util.PrintFunctionCallGraph(dafnyProgram);
       }
       if (dafnyProgram != null && options.ExtractCounterexample && exitValue == ExitValue.VERIFICATION_ERROR) {
-        PrintCounterexample(options);
+        PrintCounterexample(dafnyProgram.Options.OutputWriter, options);
       }
       return exitValue;
     }
@@ -332,29 +331,20 @@ namespace Microsoft.Dafny {
     /// Extract the counterexample corresponding to the first failing
     /// assertion and print it to the console
     /// </summary>
-    private static void PrintCounterexample(DafnyOptions options) {
-      var firstCounterexample = (options.Printer as DafnyConsolePrinter).VerificationResults
+    public static void PrintCounterexample(TextWriter writer, DafnyOptions options) {
+      var firstResultWithCounterexample = (options.Printer as DafnyConsolePrinter).VerificationResults
         .Select(result => result.Result)
-        .Where(result => result.Outcome == VcOutcome.Errors)
-        .Select(result => result.Counterexamples)
-        .Where(counterexampleList => counterexampleList != null)
-        .Select(counterexampleList => counterexampleList.FirstOrDefault(counterexample => counterexample.Model != null))
-        .FirstOrDefault(counterexample => counterexample != null);
-      if (firstCounterexample == null) {
+        .FirstOrDefault(result =>
+          result.Outcome == VcOutcome.Errors &&
+          result.Counterexamples != null &&
+          result.Counterexamples.FirstOrDefault(counterexample => counterexample.Model != null) != null);
+      if (firstResultWithCounterexample == null) {
         return;
       }
+      var firstCounterexample = firstResultWithCounterexample.Counterexamples.FirstOrDefault(counterexample => counterexample.Model != null);
       var model = new DafnyModel(firstCounterexample.Model, options);
-      options.OutputWriter.WriteLine("Counterexample for first failing assertion: ");
-      if (model.LoopGuards.Count > 0) {
-        options.OutputWriter.WriteLine("Temporary variables to describe counterexamples: ");
-        foreach (var loopGuard in model.LoopGuards) {
-          options.OutputWriter.WriteLine($"ghost var {loopGuard} : bool := false;");
-        }
-      }
-      foreach (var state in model.States.Where(state => state.StateContainsPosition())) {
-        options.OutputWriter.WriteLine(state.FullStateName + ":");
-        options.OutputWriter.WriteLine(state.AsAssumption());
-      }
+      writer.Write("The following counterexample refers to the following failing assertion:\n");
+      writer.Write(model.ToString());
     }
 
     private static string BoogieProgramSuffix(string printFile, string suffix) {

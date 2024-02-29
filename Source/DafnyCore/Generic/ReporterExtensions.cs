@@ -38,6 +38,11 @@ public static class ErrorReporterExtensions {
     }
     reporter.Message(MessageSource.Verifier, ErrorLevel.Error, null, previous, error.Msg);
   }
+  
+  public static void ReportCounterexample(this ErrorReporter reporter, DafnyOptions options, string counterexample, ErrorInformation error) {
+    var dafnyToken = BoogieGenerator.ToDafnyToken(false, error.Tok);
+    reporter.Message(MessageSource.Verifier, ErrorLevel.Error, null, dafnyToken, "'Related counterexample:\n" + counterexample);
+  }
 
   private const string RelatedLocationCategory = "Related location";
   public const string RelatedLocationMessage = RelatedLocationCategory;

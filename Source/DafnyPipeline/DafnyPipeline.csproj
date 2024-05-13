@@ -89,11 +89,6 @@
       <LinkBase>DafnyRuntimeJava</LinkBase>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
-    <EmbeddedResource Include="..\DafnyRuntime\DafnyRuntimeJava\build\libs\DafnyRuntime-4.4.0.jar">
-      <LogicalName>DafnyRuntime.jar</LogicalName>
-      <Link>DafnyRuntime.jar</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
     <EmbeddedResource Include="..\DafnyRuntime\DafnyRuntime.cs">
       <LinkBase>DafnyRuntimeCsharp</LinkBase>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

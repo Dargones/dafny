@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Microsoft.Dafny.LanguageServer.CounterExampleGeneration;
+using IdentifierExpr = Microsoft.Dafny.IdentifierExpr;
 using MapType = Microsoft.Dafny.MapType;
 using Token = Microsoft.Dafny.Token;
 using Type = Microsoft.Dafny.Type;
@@ -49,6 +50,12 @@ namespace DafnyTestGeneration {
     private readonly Modifications cache;
 
     private readonly Dictionary<PartialValue, Expression> constraintContext;
+
+    // Added for predicate generation
+    private static int classTypePredicateCounter = 0;
+    private static readonly Dictionary<PartialValue, string> classTypePredicates = new();
+    public readonly List<string> PredicateMethods = new();
+    public readonly List<string> ExpectStatements = new();
 
     public TestMethod(DafnyInfo dafnyInfo, string log, Modifications cache) {
       DafnyInfo = dafnyInfo;
@@ -239,7 +246,7 @@ namespace DafnyTestGeneration {
     private string ExtractVariable(PartialValue variable, Type/*?*/ asType) {
       if (variable == null) {
         if (asType != null) {
-          return GetDefaultValue(asType);
+          return GetDefaultValue(asType, asType);
         } else {
           errorMessages.Add("// Failed: variable and type are null");
           return "";
@@ -254,10 +261,6 @@ namespace DafnyTestGeneration {
       if (mockedVarId.ContainsKey(variable)) {
         return mockedVarId[variable];
       }
-
-      /*if (variable is DuplicateVariable duplicateVariable) {
-        return ExtractVariable(duplicateVariable.Original, asType);
-      }*/ // TODO: Is there any new form of duplication?
 
       List<string> elements = new();
       var variableType = DafnyModelTypeUtils.GetInDafnyFormat(
@@ -349,138 +352,161 @@ namespace DafnyTestGeneration {
           break;
         case UserDefinedType _ when variable.PrimitiveLiteral != "":
           return "null";
-        case UserDefinedType userDefinedType:
-          var basicType = GetBasicType(asType ?? userDefinedType,
-            type => type == null || type is not UserDefinedType definedType ||
-                    DafnyInfo.Datatypes.ContainsKey(definedType
-                      .Name)) as UserDefinedType;
-          if (basicType == null || !DafnyInfo.Datatypes.ContainsKey(basicType.Name)) {
-            return GetClassTypeInstance(userDefinedType, asType, variable);
+        case UserDefinedType userDefinedType when DafnyInfo.IsClassType(userDefinedType):
+          if (mockedVarId.ContainsKey(variable)) {
+            return mockedVarId[variable];
           }
 
-          if (variable.DatatypeConstructorName() == "") {
-            getDefaultValueParams = new();
-            return GetDefaultValue(userDefinedType, asType);
-          }
-          var ctor = DafnyInfo.Datatypes[basicType.Name].Ctors.FirstOrDefault(ctor => ctor.Name == variable.DatatypeConstructorName(), null);
-          if (ctor == null) {
-            errorMessages.Add($"// Failed: Cannot find constructor {variable.DatatypeConstructorName()} for datatype {basicType}");
-            return basicType.ToString();
-          }
-          List<string> fields = new();
-          for (int i = 0; i < ctor.Destructors.Count; i++) {
-            var fieldName = ctor.Destructors[i].Name;
-            if (!variable.Fields().ContainsKey(fieldName)) {
-              fieldName = $"[{i}]";
-            }
-
-            if (!variable.Fields().ContainsKey(fieldName)) {
-              errorMessages.Add($"// Failed: Cannot find destructor " +
-                                $"{ctor.Destructors[i].Name} of constructor " +
-                                $"{variable.DatatypeConstructorName()} for datatype " +
-                                $"{basicType}. Available destructors are: " +
-                                string.Join(",", variable.Fields().Keys.ToList()));
-              return basicType.ToString();
-            }
-
-            var destructorType = Utils.CopyWithReplacements(
-              Utils.UseFullName(ctor.Destructors[i].Type),
-              ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), basicType.TypeArgs);
-            if (ctor.Destructors[i].Name.StartsWith("#")) {
-              fields.Add(ExtractVariable(variable.Fields()[fieldName], destructorType));
-            } else {
-              fields.Add(ctor.Destructors[i].Name + ":=" +
-                         ExtractVariable(variable.Fields()[fieldName], destructorType));
-            }
-          }
-
-          var value = basicType.ToString();
-          if (fields.Count == 0) {
-            value += "." + variable.DatatypeConstructorName();
+          string predicateName;
+          if (!classTypePredicates.ContainsKey(variable)) {
+            predicateName = $"ClassTypePredicate{classTypePredicateCounter++}";
+            classTypePredicates[variable] = predicateName;
+            GeneratePredicateMethod(predicateName, userDefinedType, variable);
           } else {
-            value += "." + variable.DatatypeConstructorName() + "(" +
-                     string.Join(",", fields) + ")";
+            predicateName = classTypePredicates[variable];
           }
-          return AddValue(asType ?? userDefinedType, value);
+          var varName = AddValue(asType ?? userDefinedType, $"Generate{predicateName}()");
+          mockedVarId[variable] = varName;
+          // ExpectStatements.Add($"expect {classTypePredicates[variable]}({varName}), \"If this check fails, the test does not satisfy the constraints\";");
+          return varName;
+        case UserDefinedType userDefinedType when userDefinedType.Name.EndsWith("?"):
+          return "null";
+        case UserDefinedType datatypeType when DafnyInfo.Datatypes.ContainsKey(datatypeType.Name):
+          string value;
+          if (getDefaultValueParams.Contains(datatypeType.Name)) {
+            errorMessages.Add($"// Failed to non-recursively construct a default value for type {datatypeType}");
+            return datatypeType.Name + ".UNKNOWN";
+          }
+          getDefaultValueParams.Add(datatypeType.ToString());
+          var ctor = DafnyInfo.Datatypes[datatypeType.Name].Ctors.MinBy(ctor => ctor.Destructors.Count);
+          if (ctor.Destructors.Count == 0) {
+            value = datatypeType + "." + ctor.Name;
+          } else {
+            var assignments = ctor.Destructors.Select(destructor =>
+              (destructor.Name.StartsWith("#") ? "" : destructor.Name + ":=") + GetDefaultValue(
+                Utils.CopyWithReplacements(Utils.UseFullName(destructor.Type),
+                    ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), datatypeType.TypeArgs),
+                Utils.CopyWithReplacements(Utils.UseFullName(destructor.Type),
+                  ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), datatypeType.TypeArgs)));
+            value = datatypeType + "." + ctor.Name + "(" +
+                   string.Join(",", assignments) + ")";
+          }
+          var name = AddValue(asType ?? datatypeType, value);
+          getDefaultValueParams.RemoveAt(getDefaultValueParams.Count - 1);
+          return name;
+        case UserDefinedType userDefinedType:
+          return "null";
       }
-      errorMessages.Add($"// Failed because variable has unknown type {variableType} (element {variable.Element})");
+      errorMessages.Add(
+        $"// Failed to extract default value for type " + variableType ?? "(null)");
       return "null";
     }
+    
+    
+    private void GeneratePredicateMethod(string predicateName, UserDefinedType userDefinedType, PartialValue variable) {
+      // Map from PartialValue to expressions
+      Dictionary<PartialValue, Expression> definitions = new();
 
-    private string GetClassTypeInstance(UserDefinedType type, Type/*?*/ asType, PartialValue/*?*/ variable) {
-      var asBasicType = GetBasicType(asType, _ => false);
-      if ((asBasicType != null) && (asBasicType is not UserDefinedType)) {
-        return GetDefaultValue(asType, asType);
-      }
-      string varId;
-      var dafnyType = DafnyModelTypeUtils.GetNonNullable(asBasicType ?? type) as UserDefinedType;
-      if (!DafnyInfo.IsClassType(dafnyType)) {
-        errorMessages.Add($"// Failed to identify type class-type {dafnyType} in the AST");
-        return "null";
-      }
-      if (getClassTypeInstanceParams.Contains(dafnyType.ToString())) {
-        errorMessages.Add(
-          $"// Failed to find a non-recursive way of constructing value (type {dafnyType})");
-        return "null";
-      }
-      getClassTypeInstanceParams.Add(dafnyType.ToString());
-      if (DafnyInfo.IsTrait(dafnyType)) {
-        return "null";
-      }
-      if (DafnyInfo.IsExtern(dafnyType)) {
-        var ctor = DafnyInfo.GetConstructor(dafnyType);
-        if (ctor == null) {
-          errorMessages.Add($"// Failed to find constructor for extern class {dafnyType}");
-          return "null";
-        }
-        var constructorArgs = new List<string>();
-        foreach (var argType in ctor.Ins.Select(formal => formal.Type)) {
-          var processedType = Utils.CopyWithReplacements(
-            Utils.UseFullName(argType),
-            ctor.EnclosingClass.TypeArgs.ConvertAll(arg => arg.Name), dafnyType.TypeArgs);
-          constructorArgs.Add(GetDefaultValue(processedType));
-        }
-        var ctorName = ctor.EnclosingClass.FullDafnyName + (ctor.HasName ? ctor.Name : "");
-        varId = AddValue(dafnyType,
-          $"new {ctorName}({string.Join(", ", constructorArgs)})");
-      } else {
-        var constFieldValues = new List<string>();
-        var immutableFields = DafnyInfo.GetNonGhostFields(dafnyType)
-          .Where(field => !field.mutable);
-        foreach (var field in
-                 immutableFields) {
-          constFieldValues.Add(GetFieldValue(field, variable));
-        }
-        cache.TypesToSynthesize.Add(dafnyType);
-        varId = AddValue(dafnyType, $"{GetSynthesizeMethodName(dafnyType.ToString())}({string.Join(", ", constFieldValues)})");
-      }
-      getClassTypeInstanceParams.Remove(dafnyType.ToString());
-      if (variable != null) {
-        mockedVarId[variable] = varId;
-      }
-      var mutableFields = DafnyInfo.GetNonGhostFields(dafnyType)
-        .Where(field => field.mutable);
-      foreach (var field in mutableFields) {
-        Assignments.Add(new(varId, field.name, GetFieldValue(field, variable)));
-      }
-      return varId;
-    }
+      // Map the partialValue to the parameter name
+      var paramName = "o";
+      var paramExpr = new IdentifierExpr(Token.NoToken, paramName);
+      paramExpr.Type = userDefinedType;
+      definitions[variable] = paramExpr;
 
-    private string GetFieldValue((string name, Type type, bool mutable, string/*?*/ defValue) field, PartialValue/*?*/ variable) {
-      if (field.defValue != null) {
-        return field.defValue;
-      }
-      if (variable != null && variable.Fields().ContainsKey(field.name)) {
-        return ExtractVariable(variable.Fields()[field.name], field.type);
+      // Collect variables reachable from variable
+      var varsToProcess = new Queue<PartialValue>();
+      varsToProcess.Enqueue(variable);
+      var processedVars = new HashSet<PartialValue> { variable };
+
+      while (varsToProcess.Count > 0) {
+        var v = varsToProcess.Dequeue();
+        foreach (var relatedVar in v.GetRelatedValues()) {
+          if (!processedVars.Contains(relatedVar)) {
+            varsToProcess.Enqueue(relatedVar);
+            processedVars.Add(relatedVar);
+          }
+        }
       }
 
-      var previouslyCreated = ValueCreation.FirstOrDefault(obj =>
-        DafnyModelTypeUtils.GetNonNullable(obj.type).ToString() ==
-        DafnyModelTypeUtils.GetNonNullable(field.type).ToString(), (null, null, null)).id;
-      if (previouslyCreated != null) {
-        return previouslyCreated;
+      // Apply preprocessing to constraints for sets and maps
+      foreach (var partialValue in processedVars.Where(pv =>
+                 pv.Type is SetType || pv.Type is MapType)) {
+        var elements = partialValue.Constraints
+          .OfType<ContainmentConstraint>()
+          .Where(c => c.IsIn && Equals(c.Set, partialValue))
+          .Select(c => c.Element).ToList();
+        if (elements.Count == 0 && partialValue.Constraints.OfType<LiteralExprConstraint>()
+              .Any(c => c.LiteralExpr is SetDisplayExpr or MapDisplayExpr)) {
+          continue;
+        }
+
+        if (partialValue.Type is SetType) {
+          _ = new SetDisplayConstraint(partialValue, elements);
+        } else {
+          _ = new MapKeysDisplayConstraint(partialValue, elements);
+        }
       }
-      return GetDefaultValue(field.type, field.type);
+
+      // Collect and filter constraints
+      var allConstraints = processedVars.SelectMany(var => var.Constraints).ToHashSet()
+        .Where(constraint => constraint is not IdentifierExprConstraint)
+        .Where(constraint =>
+          constraint is not ContainmentConstraint containmentConstraint || containmentConstraint.IsIn)
+        .Where(constraint => constraint is not FunctionCallConstraint functionCallConstraint ||
+                             (functionCallConstraint.DefinedValue.Type == Type.Bool &&
+                              functionCallConstraint.ReferencedValues.Count() == 1))
+        .ToList();
+
+      // Resolve and order constraints without introducing new variables
+      var constraints = Constraint.ResolveAndOrder(definitions, allConstraints, false);
+
+      // Convert constraints to expressions
+      var constraintExprs = new List<Expression>();
+      var constraintsAsStrings = new HashSet<string>();
+      foreach (var constraint in constraints) {
+        var expr = constraint.AsExpression(definitions);
+        if (expr == null || constraint is TypeTestConstraint || constraint is DatatypeConstructorCheckConstraint) {
+          continue;
+        }
+
+        var exprString = expr.ToString();
+        if (constraintsAsStrings.Contains(exprString)) {
+          continue;
+        }
+        constraintsAsStrings.Add(exprString);
+
+        // Optimization: Convert 'A !in users' to '!(A in users)' and 'A != B' to '!(A == B)'
+        /*if (expr is BinaryExpr binaryExpr) {
+          if (binaryExpr.Op == BinaryExpr.Opcode.NotIn) {
+            expr = new BinaryExpr(binaryExpr.tok, BinaryExpr.Opcode.In, binaryExpr.E0, binaryExpr.E1);
+            expr.Type = Type.Bool;
+            expr = new UnaryOpExpr(binaryExpr.tok, UnaryOpExpr.Opcode.Not, expr) { Type = Type.Bool };
+            constraintExprs.Add(expr);
+            continue;
+          }
+          if (binaryExpr.Op == BinaryExpr.Opcode.Neq) {
+            expr = new BinaryExpr(binaryExpr.tok, BinaryExpr.Opcode.Eq, binaryExpr.E0, binaryExpr.E1);
+            expr.Type = Type.Bool;
+            expr = new UnaryOpExpr(binaryExpr.tok, UnaryOpExpr.Opcode.Not, expr) { Type = Type.Bool };
+            constraintExprs.Add(expr);
+            continue;
+          }
+        }*/
+
+        constraintExprs.Add(expr);
+      }
+
+      // Build the conjunction of constraints
+      Expression body = PartialState.GetCompactConjunction(constraintExprs);
+
+      // Generate the predicate code
+      var functionCode = $"ghost predicate {{:synthesize \"Generate{predicateName}\"}} {predicateName}(o: {userDefinedType}) reads o {{\n";
+      functionCode += $"  {Printer.ExprToString(DafnyInfo.Options, body)}\n";
+      functionCode += "}";
+      PredicateMethods.Add(functionCode);
+      var implementingMethod =
+        $"static method Generate{predicateName} () returns (o: {userDefinedType}) ensures {predicateName}(o)";
+      PredicateMethods.Add(implementingMethod);
     }
 
     private static string GetPrimitiveAsType(string value, Type/*?*/ asType) {
@@ -565,7 +591,7 @@ namespace DafnyTestGeneration {
           getDefaultValueParams.RemoveAt(getDefaultValueParams.Count - 1);
           return name;
         case UserDefinedType userDefinedType:
-          return GetClassTypeInstance(userDefinedType, asType, null);
+          return "null";
       }
       errorMessages.Add(
         $"// Failed to extract default value for type " + type ?? "(null)");
@@ -617,6 +643,9 @@ namespace DafnyTestGeneration {
         lines.Add($"{assignment.parentId}.{assignment.fieldName} := " +
                   $"{assignment.childId};");
       }
+
+      // Add expect statements for class type predicates
+      lines.AddRange(ExpectStatements);
 
       return lines;
     }
@@ -692,6 +721,9 @@ namespace DafnyTestGeneration {
         ArgValues.Insert(0, receiver);
       }
       lines.Add("}");
+
+      // Add the predicate methods to the output
+      lines.AddRange(PredicateMethods);
 
       return lines;
     }

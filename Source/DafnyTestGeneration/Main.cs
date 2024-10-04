@@ -196,7 +196,9 @@ namespace DafnyTestGeneration {
         }
 
         yield return testMethod;
-        yield break;
+        if (options.TestGenOptions.OneTestOnly) {
+          yield break;
+        }
       }
     }
 
@@ -236,9 +238,9 @@ namespace DafnyTestGeneration {
           dafnyInfo = new DafnyInfo(program);
           foreach (var module in dafnyInfo.ToImportAs.Keys) {
             if (module.Split(".").Last() == dafnyInfo.ToImportAs[module]) {
-              yield return $"import {module}";
+              yield return $"import opened {module}";
             } else {
-              yield return $"import {dafnyInfo.ToImportAs[module]} = {module}";
+              yield return $"import opened {dafnyInfo.ToImportAs[module]} = {module}";
             }
           }
         }

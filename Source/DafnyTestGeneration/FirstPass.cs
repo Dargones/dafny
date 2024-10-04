@@ -258,9 +258,9 @@ public class FirstPass {
             TypeIsSupported(field.Type, testEntry);
           }
         }
-        diagnostics.Add(new DafnyDiagnostic(NotFullySupportedInputTypeWarning, type.Tok,
+        /*diagnostics.Add(new DafnyDiagnostic(NotFullySupportedInputTypeWarning, type.Tok,
           $"Test Generation does not fully support class types as inputs.\n{genericMessage}",
-          MessageSource.TestGeneration, ErrorLevel.Warning, new List<DafnyRelatedInformation>()));
+          MessageSource.TestGeneration, ErrorLevel.Warning, new List<DafnyRelatedInformation>()));*/
       } else if (userDefinedType.IsArrowType) {
         diagnostics.Add(new DafnyDiagnostic(NotFullySupportedInputTypeWarning, type.Tok,
           $"Test Generation does not fully support function types as inputs.\n{genericMessage}",

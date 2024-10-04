@@ -27,7 +27,8 @@ static class GenerateTestsCommand {
       PrintBpl,
       CoverageReport,
       CommonOptionBag.NoTimeStampForCoverageReport,
-      ForcePrune
+      ForcePrune,
+      OneTestOnly
     }.Concat(DafnyCommands.ConsoleOutputOptions).
       Concat(DafnyCommands.ResolverOptions);
 
@@ -134,6 +135,9 @@ Path - Generate tests targeting path-coverage.");
   };
   public static readonly Option<bool> ForcePrune = new("--force-prune",
     "Enable axiom pruning that Dafny uses to speed up verification. This may negatively affect the quality of tests.");
+  
+  public static readonly Option<bool> OneTestOnly = new("--one-test-only",
+    "Only generate a single test.");
   static GenerateTestsCommand() {
     DafnyOptions.RegisterLegacyBinding(LoopUnroll, (options, value) => {
       options.LoopUnrollCount = value;
@@ -150,13 +154,17 @@ Path - Generate tests targeting path-coverage.");
     DafnyOptions.RegisterLegacyBinding(ForcePrune, (options, value) => {
       options.TestGenOptions.ForcePrune = value;
     });
+    DafnyOptions.RegisterLegacyBinding(OneTestOnly, (options, value) => {
+      options.TestGenOptions.OneTestOnly = value;
+    });
 
     DooFile.RegisterNoChecksNeeded(
       LoopUnroll,
       SequenceLengthLimit,
       PrintBpl,
       CoverageReport,
-      ForcePrune
+      ForcePrune,
+      OneTestOnly
     );
   }
 }

@@ -75,7 +75,7 @@ public class PartialState {
   /// stackoverflow errors that occur if multiple conjuncts are joined in a linked list fashion.
   /// </summary>
   /// <returns></returns>
-  private Expression GetCompactConjunction(List<Expression> conjuncts) {
+  public static Expression GetCompactConjunction(List<Expression> conjuncts) {
     if (!conjuncts.Any()) {
       return new LiteralExpr(Token.NoToken, true);
     }

@@ -13,6 +13,7 @@ namespace Microsoft.Dafny {
     public uint SeqLengthLimit = 0;
     [CanBeNull] public string PrintBpl = null;
     public bool ForcePrune = false;
+    public bool OneTestOnly = false;
     public string CoverageReport = null;
     public const uint DefaultTimeLimit = 20;
   }

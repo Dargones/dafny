@@ -1,15 +1,29 @@
+using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.IO;
+using System.Linq;
 using DafnyCore;
 
 namespace Microsoft.Dafny;
 
+
 static class TestCommand {
+  
+  public static readonly Option<IEnumerable<string>> Inputs = new("--input", "Specify an additional input file.") {
+    ArgumentHelpName = "file"
+  };
 
   static TestCommand() {
+    DafnyOptions.RegisterLegacyBinding(Inputs, (options, files) => {
+      foreach (var file in files) {
+        options.CliRootSourceUris.Add(new Uri(Path.GetFullPath(file)));
+      }
+    });
+    
     DafnyOptions.RegisterLegacyBinding(MethodsToTest, (o, v) => { o.MethodsToTest = v; });
 
-    DooFile.RegisterNoChecksNeeded(MethodsToTest);
+    DooFile.RegisterNoChecksNeeded(MethodsToTest, Inputs);
 
     DafnyOptions.RegisterLegacyUi(RunAllTestsMainMethod.IncludeTestRunner, DafnyOptions.ParseBoolean, "Compilation options", "runAllTests", @"0 (default) - Annotates compiled methods with the {:test}
         attribute such that they can be tested using a testing framework
@@ -23,6 +37,7 @@ static class TestCommand {
 
   public static IEnumerable<Option> Options =>
     new Option[] {
+      Inputs,
       CommonOptionBag.Output,
       MethodsToTest,
     }.Concat(DafnyCommands.ExecutionOptions).

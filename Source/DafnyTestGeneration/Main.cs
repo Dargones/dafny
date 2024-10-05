@@ -187,12 +187,18 @@ namespace DafnyTestGeneration {
 
         var log = await modification.GetCounterExampleLog(cache);
         if (log == null) {
-          break;
+          if (options.TestGenOptions.OneTestOnly) {
+            break;
+          }
+          continue;
         }
 
         var testMethod = await modification.GetTestMethod(cache, dafnyInfo);
         if (testMethod == null) {
-          break;
+          if (options.TestGenOptions.OneTestOnly) {
+            break;
+          }
+          continue;
         }
 
         yield return testMethod;

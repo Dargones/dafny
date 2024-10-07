@@ -352,50 +352,83 @@ namespace DafnyTestGeneration {
           break;
         case UserDefinedType _ when variable.PrimitiveLiteral != "":
           return "null";
-        case UserDefinedType userDefinedType when DafnyInfo.IsClassType(userDefinedType):
-          if (mockedVarId.ContainsKey(variable)) {
-            return mockedVarId[variable];
-          }
-
-          string predicateName;
-          if (!classTypePredicates.ContainsKey(variable)) {
-            predicateName = $"ClassTypePredicate{classTypePredicateCounter++}";
-            classTypePredicates[variable] = predicateName;
-            GeneratePredicateMethod(predicateName, userDefinedType, variable);
-          } else {
-            predicateName = classTypePredicates[variable];
-          }
-          var varName = AddValue(asType ?? userDefinedType, $"Generate{predicateName}()");
-          mockedVarId[variable] = varName;
-          // ExpectStatements.Add($"expect {classTypePredicates[variable]}({varName}), \"If this check fails, the test does not satisfy the constraints\";");
-          return varName;
-        case UserDefinedType userDefinedType when userDefinedType.Name.EndsWith("?"):
-          return "null";
-        case UserDefinedType datatypeType when DafnyInfo.Datatypes.ContainsKey(datatypeType.Name):
-          string value;
-          if (getDefaultValueParams.Contains(datatypeType.Name)) {
-            errorMessages.Add($"// Failed to non-recursively construct a default value for type {datatypeType}");
-            return datatypeType.Name + ".UNKNOWN";
-          }
-          getDefaultValueParams.Add(datatypeType.ToString());
-          var ctor = DafnyInfo.Datatypes[datatypeType.Name].Ctors.MinBy(ctor => ctor.Destructors.Count);
-          if (ctor.Destructors.Count == 0) {
-            value = datatypeType + "." + ctor.Name;
-          } else {
-            var assignments = ctor.Destructors.Select(destructor =>
-              (destructor.Name.StartsWith("#") ? "" : destructor.Name + ":=") + GetDefaultValue(
-                Utils.CopyWithReplacements(Utils.UseFullName(destructor.Type),
-                    ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), datatypeType.TypeArgs),
-                Utils.CopyWithReplacements(Utils.UseFullName(destructor.Type),
-                  ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), datatypeType.TypeArgs)));
-            value = datatypeType + "." + ctor.Name + "(" +
-                   string.Join(",", assignments) + ")";
-          }
-          var name = AddValue(asType ?? datatypeType, value);
-          getDefaultValueParams.RemoveAt(getDefaultValueParams.Count - 1);
-          return name;
         case UserDefinedType userDefinedType:
-          return "null";
+          var basicType = GetBasicType(asType ?? userDefinedType,
+            type => type == null || type is not UserDefinedType definedType ||
+                    DafnyInfo.Datatypes.ContainsKey(definedType
+                      .Name)) as UserDefinedType;
+          if (basicType == null || !DafnyInfo.Datatypes.ContainsKey(basicType.Name)) {
+            if (DafnyInfo.IsClassType(userDefinedType)) {
+              if (mockedVarId.ContainsKey(variable)) {
+                return mockedVarId[variable];
+              }
+
+              string predicateName;
+              if (!classTypePredicates.ContainsKey(variable)) {
+                predicateName = $"ClassTypePredicate{classTypePredicateCounter++}";
+                classTypePredicates[variable] = predicateName;
+                GeneratePredicateMethod(predicateName, userDefinedType, variable);
+              } else {
+                predicateName = classTypePredicates[variable];
+              }
+
+              var varName = AddValue(asType ?? userDefinedType, $"Generate{predicateName}()");
+              mockedVarId[variable] = varName;
+              // ExpectStatements.Add($"expect {classTypePredicates[variable]}({varName}), \"If this check fails, the test does not satisfy the constraints\";");
+              return varName;
+            }
+            return "null";
+          } else {
+            if (variable.DatatypeConstructorName() == "") {
+              getDefaultValueParams = new();
+              return GetDefaultValue(userDefinedType, asType);
+            }
+
+            var ctor = DafnyInfo.Datatypes[basicType.Name].Ctors
+              .FirstOrDefault(ctor => ctor.Name == variable.DatatypeConstructorName(), null);
+            if (ctor == null) {
+              errorMessages.Add(
+                $"// Failed: Cannot find constructor {variable.DatatypeConstructorName()} for datatype {basicType}");
+              return basicType.ToString();
+            }
+
+            List<string> fields = new();
+            for (int i = 0; i < ctor.Destructors.Count; i++) {
+              var fieldName = ctor.Destructors[i].Name;
+              if (!variable.Fields().ContainsKey(fieldName)) {
+                fieldName = $"[{i}]";
+              }
+
+              if (!variable.Fields().ContainsKey(fieldName)) {
+                errorMessages.Add($"// Failed: Cannot find destructor " +
+                                  $"{ctor.Destructors[i].Name} of constructor " +
+                                  $"{variable.DatatypeConstructorName()} for datatype " +
+                                  $"{basicType}. Available destructors are: " +
+                                  string.Join(",", variable.Fields().Keys.ToList()));
+                return basicType.ToString();
+              }
+
+              var destructorType = Utils.CopyWithReplacements(
+                Utils.UseFullName(ctor.Destructors[i].Type),
+                ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), basicType.TypeArgs);
+              if (ctor.Destructors[i].Name.StartsWith("#")) {
+                fields.Add(ExtractVariable(variable.Fields()[fieldName], destructorType));
+              } else {
+                fields.Add(ctor.Destructors[i].Name + ":=" +
+                           ExtractVariable(variable.Fields()[fieldName], destructorType));
+              }
+            }
+
+            var value = basicType.ToString();
+            if (fields.Count == 0) {
+              value += "." + variable.DatatypeConstructorName();
+            } else {
+              value += "." + variable.DatatypeConstructorName() + "(" +
+                       string.Join(",", fields) + ")";
+            }
+
+            return AddValue(asType ?? userDefinedType, value);
+          }
       }
       errorMessages.Add(
         $"// Failed to extract default value for type " + variableType ?? "(null)");

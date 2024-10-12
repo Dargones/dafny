@@ -419,6 +419,11 @@ namespace Microsoft.Dafny.LanguageServer.CounterExampleGeneration {
             .ToList();
         }
 
+        if (destructors.Count == 0 && fnTuple.Args.Length == 0) {
+          var _ = new DatatypeValueConstraint(value, value.Type.ToString(), fnTuple.Func.Name.Split(".").Last(), new List<PartialValue>());
+          return;
+        }
+
         if (destructors.Count == fnTuple.Args.Length) {
           // we know all destructor names
           foreach (var func in destructors) {

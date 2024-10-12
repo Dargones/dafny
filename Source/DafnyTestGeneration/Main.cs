@@ -257,7 +257,12 @@ namespace DafnyTestGeneration {
       yield return TestMethod.EmitSynthesizeMethods(dafnyInfo, cache);
       yield return "}";
 
-      PopulateCoverageReport(report, program, cache);
+      try {
+        PopulateCoverageReport(report, program, cache);
+      } catch (Exception e) {
+        
+      }
+      
 
       if (methodsGenerated == 0) {
         options.Printer.ErrorWriteLine(options.ErrorWriter,

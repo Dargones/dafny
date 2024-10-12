@@ -28,6 +28,7 @@ namespace DafnyTestGeneration {
     public readonly List<(string id, Type type, string value)> ValueCreation = new();
     // next id to assign to a variable with given name:
     private Dictionary<string, int> nameToNextId = new();
+    public Dictionary<PartialValue, string> partialValueToNameMap = new();
     private readonly int id = nextId++;
     public readonly DafnyInfo DafnyInfo;
     // name of the method for which the counterexample is generated
@@ -82,7 +83,7 @@ namespace DafnyTestGeneration {
     /// The name of the variable assigned to the value is chosen so that it is
     /// unique and begins with the name of the type. Return that name.
     /// </summary>
-    private string AddValue(Type type, string value) {
+    private string AddValue(PartialValue partialValue, Type type, string value) {
       var name = Regex.Replace(type.ToString().Split(".").Last().Split(" ")[0], "[^a-zA-Z]", "");
       if (name == "") {
         name = "v";
@@ -93,6 +94,9 @@ namespace DafnyTestGeneration {
       }
       name += nameToNextId[name]++;
       ValueCreation.Add((name, type, value));
+      if (partialValue != null) {
+        partialValueToNameMap[partialValue] = name;
+      }
       return name;
     }
 
@@ -186,7 +190,7 @@ namespace DafnyTestGeneration {
         }
         if (printOutput[i] == "") {
           getDefaultValueParams = new();
-          result.Add(GetDefaultValue(type, type));
+          result.Add(GetDefaultValue(null, type, type));
           continue;
         }
         if (!printOutput[i].StartsWith("T@")) {
@@ -221,7 +225,7 @@ namespace DafnyTestGeneration {
       var lambda =
         $"({string.Join(",", type.TypeArgs.SkipLast(1).Select((t, i) => "a" + i + ":" + t))})" + // parameter types
         "=>" + // return type
-        $"{GetDefaultValue(type.TypeArgs.Last())}"; // body
+        $"{GetDefaultValue(null, type.TypeArgs.Last())}"; // body
       return lambda;
     }
 
@@ -246,7 +250,7 @@ namespace DafnyTestGeneration {
     private string ExtractVariable(PartialValue variable, Type/*?*/ asType) {
       if (variable == null) {
         if (asType != null) {
-          return GetDefaultValue(asType, asType);
+          return GetDefaultValue(variable, asType, asType);
         } else {
           errorMessages.Add("// Failed: variable and type are null");
           return "";
@@ -286,13 +290,13 @@ namespace DafnyTestGeneration {
             if (seqType.Arg is CharType) {
               return "\"\"";
             }
-            return AddValue(asType ?? variableType, "[]");
+            return AddValue(variable, asType ?? variableType, "[]");
           }
           for (var i = 0; i < variable?.Cardinality(); i++) {
             var element = variable?[i];
             if (element == null) {
               getDefaultValueParams = new();
-              elements.Add(GetDefaultValue(seqType.Arg, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
+              elements.Add(GetDefaultValue(null, seqType.Arg, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
               continue;
             }
             elements.Add(ExtractVariable(element, asBasicSeqType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
@@ -318,13 +322,13 @@ namespace DafnyTestGeneration {
           if (seqType.Arg is CharType || asBasicSeqType?.TypeArgs?.FirstOrDefault((Type/*?*/)null) is CharType) {
             return $"\"{string.Join("", elements.SelectMany(c => c[1..^1]))}\"";
           }
-          return AddValue(asType ?? variableType, $"[{string.Join(", ", elements)}]");
+          return AddValue(variable, asType ?? variableType, $"[{string.Join(", ", elements)}]");
         case SetType:
           var asBasicSetType = GetBasicType(asType, type => type is SetType) as SetType;
           foreach (var element in variable.SetElements()) {
             elements.Add(ExtractVariable(element, asBasicSetType?.TypeArgs?.FirstOrDefault((Type/*?*/)null)));
           }
-          return AddValue(asType ?? variableType, $"{{{string.Join(", ", elements)}}}");
+          return AddValue(variable, asType ?? variableType, $"{{{string.Join(", ", elements)}}}");
         case MapType:
           var asBasicMapType = GetBasicType(asType, type => type is MapType) as MapType;
           List<string> mappingStrings = new();
@@ -333,9 +337,9 @@ namespace DafnyTestGeneration {
               asBasicMapType?.TypeArgs?.Count == 2 ? asBasicMapType.TypeArgs : null;
             mappingStrings.Add($"{ExtractVariable(mapping.Key, asTypeTypeArgs?[0])} := {ExtractVariable(mapping.Value, asTypeTypeArgs?[1])}");
           }
-          return AddValue(asType ?? variableType, $"map[{string.Join(", ", mappingStrings)}]");
+          return AddValue(variable, asType ?? variableType, $"map[{string.Join(", ", mappingStrings)}]");
         case UserDefinedType tupleType when tupleType.Name.StartsWith("_tuple#"):
-          return AddValue(asType ?? variableType, "(" +
+          return AddValue(variable, asType ?? variableType, "(" +
             string.Join(",", variable.UnnamedDestructors()
               .Select(v => ExtractVariable(v, null))) + ")");
         case ArrowType arrowType:
@@ -343,7 +347,7 @@ namespace DafnyTestGeneration {
           return GetFunctionOfType(asBasicArrowType ?? arrowType);
         case UserDefinedType unknown when unknown.Name == DafnyModel.UnknownType.Name:
           if (asType != null) {
-            return GetDefaultValue(asType, asType);
+            return GetDefaultValue(variable , asType, asType);
           }
           errorMessages.Add($"// Failed to determine a variable type (element {variable.Element}).");
           return "null";
@@ -372,8 +376,9 @@ namespace DafnyTestGeneration {
                 predicateName = classTypePredicates[variable];
               }
 
-              var varName = AddValue(asType ?? userDefinedType, $"Generate{predicateName}()");
+              var varName = AddValue(variable, asType ?? userDefinedType, $"Generate{predicateName}()");
               mockedVarId[variable] = varName;
+              partialValueToNameMap[variable] = varName;
               // ExpectStatements.Add($"expect {classTypePredicates[variable]}({varName}), \"If this check fails, the test does not satisfy the constraints\";");
               return varName;
             }
@@ -381,7 +386,7 @@ namespace DafnyTestGeneration {
           } else {
             if (variable.DatatypeConstructorName() == "") {
               getDefaultValueParams = new();
-              return GetDefaultValue(userDefinedType, asType);
+              return GetDefaultValue(variable, userDefinedType, asType);
             }
 
             var ctor = DafnyInfo.Datatypes[basicType.Name].Ctors
@@ -427,7 +432,7 @@ namespace DafnyTestGeneration {
                        string.Join(",", fields) + ")";
             }
 
-            return AddValue(asType ?? userDefinedType, value);
+            return AddValue(variable, asType ?? userDefinedType, value);
           }
       }
       errorMessages.Add(
@@ -445,6 +450,13 @@ namespace DafnyTestGeneration {
       var paramExpr = new IdentifierExpr(Token.NoToken, paramName);
       paramExpr.Type = userDefinedType;
       definitions[variable] = paramExpr;
+      foreach (var partialValue in partialValueToNameMap.Keys) {
+        if (ValueCreation.Any(vc => vc.id == partialValueToNameMap[partialValue])) {
+          var created = ValueCreation.First(vc => vc.id == partialValueToNameMap[partialValue]);
+          definitions[partialValue] = new IdentifierExpr(Token.NoToken, created.value);
+          definitions[partialValue].Type = created.type;
+        }
+      }
 
       // Collect variables reachable from variable
       var varsToProcess = new Queue<PartialValue>();
@@ -486,8 +498,7 @@ namespace DafnyTestGeneration {
         .Where(constraint =>
           constraint is not ContainmentConstraint containmentConstraint || containmentConstraint.IsIn)
         .Where(constraint => constraint is not FunctionCallConstraint functionCallConstraint ||
-                             (functionCallConstraint.DefinedValue.Type == Type.Bool &&
-                              functionCallConstraint.ReferencedValues.Count() == 1))
+                             (functionCallConstraint.ReferencedValues.Count() == 1))
         .ToList();
 
       // Resolve and order constraints without introducing new variables
@@ -538,7 +549,7 @@ namespace DafnyTestGeneration {
       functionCode += "}";
       PredicateMethods.Add(functionCode);
       var implementingMethod =
-        $"static method Generate{predicateName} () returns (o: {userDefinedType}) ensures {predicateName}(o)";
+        $"static method Generate{predicateName} () returns (o: {userDefinedType}) ensures fresh(o) && {predicateName}(o)";
       PredicateMethods.Add(implementingMethod);
     }
 
@@ -560,7 +571,7 @@ namespace DafnyTestGeneration {
     /// An unspecified value is such a value for which a model does reserve
     /// an element (e.g. T@U!val!25).
     /// </summary>
-    private string GetDefaultValue(Type type, Type/*?*/ asType = null) {
+    private string GetDefaultValue(PartialValue partialValue, Type type, Type/*?*/ asType = null) {
       if (type == null) {
         errorMessages.Add("// Failed - cannot determine type");
         return "";
@@ -582,17 +593,17 @@ namespace DafnyTestGeneration {
         case BitvectorType bitvectorType:
           return GetPrimitiveAsType($"(0 as bv{bitvectorType.Width})", asType);
         case SeqType seqType:
-          return seqType.Arg is CharType ? "\"\"" : AddValue(asType ?? type, "[]");
+          return seqType.Arg is CharType ? "\"\"" : AddValue(partialValue, asType ?? type, "[]");
         case SetType:
-          return AddValue(asType ?? type, "{}");
+          return AddValue(partialValue, asType ?? type, "{}");
         case MapType mapType:
-          return AddValue(asType ?? type, mapType.Finite ? "map[]" : "imap[]");
+          return AddValue(partialValue, asType ?? type, mapType.Finite ? "map[]" : "imap[]");
         case UserDefinedType tupleType when tupleType.Name.StartsWith("_tuple#"):
           var destructors = new List<string>();
           foreach (var arg in tupleType.TypeArgs) {
-            destructors.Add(GetDefaultValue(arg));
+            destructors.Add(GetDefaultValue(null, arg));
           }
-          return AddValue(tupleType, "(" + string.Join(",", destructors) + ")");
+          return AddValue(partialValue, tupleType, "(" + string.Join(",", destructors) + ")");
         case ArrowType arrowType:
           return GetFunctionOfType(arrowType);
         case UserDefinedType unknown when unknown.Name == DafnyModel.UnknownType.Name:
@@ -612,7 +623,7 @@ namespace DafnyTestGeneration {
             value = datatypeType + "." + ctor.Name;
           } else {
             var assignments = ctor.Destructors.Select(destructor =>
-              (destructor.Name.StartsWith("#") ? "" : destructor.Name + ":=") + GetDefaultValue(
+              (destructor.Name.StartsWith("#") ? "" : destructor.Name + ":=") + GetDefaultValue(null,
                 Utils.CopyWithReplacements(Utils.UseFullName(destructor.Type),
                     ctor.EnclosingDatatype.TypeArgs.ConvertAll(arg => arg.Name), datatypeType.TypeArgs),
                 Utils.CopyWithReplacements(Utils.UseFullName(destructor.Type),
@@ -620,7 +631,7 @@ namespace DafnyTestGeneration {
             value = datatypeType + "." + ctor.Name + "(" +
                    string.Join(",", assignments) + ")";
           }
-          var name = AddValue(asType ?? datatypeType, value);
+          var name = AddValue(partialValue, asType ?? datatypeType, value);
           getDefaultValueParams.RemoveAt(getDefaultValueParams.Count - 1);
           return name;
         case UserDefinedType userDefinedType:

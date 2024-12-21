@@ -72,6 +72,15 @@ z3-ubuntu:
 	mv z3-* ${DIR}/Binaries/z3/bin/
 	chmod +x ${DIR}/Binaries/z3/bin/z3-*
 
+z3-ubuntu-arm:
+	mkdir -p ${DIR}/Binaries/z3/bin
+	wget https://github.com/Z3Prover/z3/releases/download/z3-4.13.0/z3_solver-4.13.0.0-py2.py3-none-manylinux2014_aarch64.whl
+	unzip z3_solver-4.13.0.0-py2.py3-none-manylinux2014_aarch64.whl
+	rm z3_solver-4.13.0.0-py2.py3-none-manylinux2014_aarch64.whl
+	mv z3_solver-4.13.0.0.data/data/bin/z3 ${DIR}/Binaries/z3/bin/
+	rm -rf z3*
+	chmod +x ${DIR}/Binaries/z3/bin/z3
+
 format:
 	dotnet format whitespace Source/Dafny.sln --exclude Source/DafnyCore/Scanner.cs --exclude Source/DafnyCore/Parser.cs --exclude boogie --exclude Source/DafnyCore/GeneratedFromDafny.cs --exclude Source/DafnyRuntime/DafnyRuntimeSystemModule.cs
 
